@@ -1,6 +1,7 @@
 import React from "react";
 import { Input as MTInput } from "@material-tailwind/react";
-import { FaEye } from "react-icons/fa";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { InputWithHelperText } from "./InputHelperText";
 
 const Input = ({
   type,
@@ -11,22 +12,32 @@ const Input = ({
   htmlFor,
   handleToggle,
   showPassword,
+  required,
+  errorText,
 }) => {
   return (
     <div>
       <label htmlFor={htmlFor} className="capitalize">
         {htmlFor}
       </label>
-      <div className="flex">
+      <div className="flex flex-col">
         <MTInput
           type={type}
           color="red"
           label={placeholder}
-          icon={name === "password" && <FaEye onClick={handleToggle} className="fas fa-heart" />}
+          icon={
+            name === "password" && (
+              showPassword ? <FaEye onClick={handleToggle} size={18} className="fas fa-heart cursor-pointer" />
+              : <FaEyeSlash size={18} onClick={handleToggle} className="cursor-pointer" />
+            )
+          }
           value={value}
           name={name}
           onChange={onChange}
+          required={required}
+          error={errorText.trim()}
         />
+        {errorText.trim() && <InputWithHelperText text={errorText} />}
       </div>
     </div>
   );

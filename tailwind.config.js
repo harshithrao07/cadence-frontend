@@ -7,7 +7,20 @@ module.exports = withMT({
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      animation: {
+        'fade-in': 'fadeIn 0.3s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: 0 },
+          '100%': { opacity: 1 },
+        },
+      },
+      fontFamily: {
+        outfit: ['Outfit', 'sans-serif'],
+      }
+    },
   },
   plugins: [],
 });

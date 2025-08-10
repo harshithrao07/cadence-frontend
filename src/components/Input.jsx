@@ -23,7 +23,7 @@ const Input = ({
       <div className="flex flex-col">
         <MTInput
           type={type}
-          color="red"
+          color="white"
           label={placeholder}
           icon={
             name === "password" && (

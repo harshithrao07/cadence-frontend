@@ -8,7 +8,6 @@ import { CustomStepper } from "@/components/CustomStepper";
 import DatePicker from "@/components/DatePicker";
 import ProfilePictureSelector from "@/components/ProfilePictureSelector";
 import Link from "next/link";
-import { IoCheckmarkCircle } from "react-icons/io5";
 
 const Signup = () => {
   const [signupBody, setSignupBody] = useState({
@@ -56,13 +55,13 @@ const Signup = () => {
         return false;
       }
 
-      if (signupBody.password.length < 10) {
-        setError("Password must contain at least 10 characters");
+      if (!hasSpecialOrNumber.test(signupBody.password)) {
+        setError("Password must contain a number or special character");
         return false;
       }
 
-      if (!hasSpecialOrNumber.test(signupBody.password)) {
-        setError("Password must contain a number or special character");
+      if (signupBody.password.length < 10) {
+        setError("Password must contain at least 10 characters");
         return false;
       }
     }
@@ -85,14 +84,33 @@ const Signup = () => {
       [name]: value,
     }));
 
-    if (name === "password") {
+    if (name === "email") {
+      if (value.trim().length > 0) {
+        setError("");
+      }
+
+      if (value.includes("@")) {
+        setError("");
+      }
+    } else if (name === "password") {
       const updatedConditions = [
         value.trim().length > 0, // not empty
         hasSpecialOrNumber.test(value), // contains special char or number
         value.length >= 10, // at least 10 characters
       ];
 
+      if (
+        updatedConditions[0] &&
+        updatedConditions[1] &&
+        updatedConditions[2]
+      ) {
+        setError("");
+      }
       setInvalidPasswordConditions(updatedConditions);
+    } else if (name === "name") {
+      if (value.trim().length > 0) {
+        setError("");
+      }
     }
   };
 

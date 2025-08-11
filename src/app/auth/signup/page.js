@@ -8,6 +8,7 @@ import { CustomStepper } from "@/components/CustomStepper";
 import DatePicker from "@/components/DatePicker";
 import ProfilePictureSelector from "@/components/ProfilePictureSelector";
 import Link from "next/link";
+import axios from "axios";
 
 const Signup = () => {
   const [signupBody, setSignupBody] = useState({
@@ -36,7 +37,7 @@ const Signup = () => {
     console.log(signupBody);
   };
 
-  const validateStep = (step) => {
+  const validateStep = async (step) => {
     if (step === 0) {
       if (!signupBody.email.trim()) {
         setError("Email is required");
@@ -45,6 +46,21 @@ const Signup = () => {
 
       if (!signupBody.email.includes("@")) {
         setError("Invalid email");
+        return false;
+      }
+
+      const response = await axios.post(
+        process.env.NEXT_PUBLIC_SERVER_URL + "/auth/v1/validateEmail",
+        signupBody.email,
+        {
+          headers: {
+            "Content-Type": "text/plain",
+          },
+        }
+      );
+
+      if (response.data.data) {
+        setError(response.data.message);
         return false;
       }
     }
@@ -118,8 +134,9 @@ const Signup = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleNext = () => {
-    if (validateStep(activeStep)) {
+  const handleNext = async () => {
+    const isValid = await validateStep(activeStep);
+    if (isValid) {
       if (activeStep < 3) {
         setActiveStep((prev) => prev + 1);
       } else {

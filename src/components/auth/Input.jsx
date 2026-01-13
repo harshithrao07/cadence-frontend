@@ -15,6 +15,8 @@ const Input = ({
   required,
   errorText,
 }) => {
+  const hasError = Boolean(errorText && errorText.trim());
+
   return (
     <div>
       <label htmlFor={htmlFor} className="capitalize">
@@ -26,18 +28,28 @@ const Input = ({
           color="white"
           label={placeholder}
           icon={
-            name === "password" && (
-              showPassword ? <FaEye onClick={handleToggle} size={18} className="fas fa-heart cursor-pointer" />
-              : <FaEyeSlash size={18} onClick={handleToggle} className="cursor-pointer" />
-            )
+            name === "password" &&
+            (showPassword ? (
+              <FaEye
+                onClick={handleToggle}
+                size={18}
+                className="fas fa-heart cursor-pointer"
+              />
+            ) : (
+              <FaEyeSlash
+                size={18}
+                onClick={handleToggle}
+                className="cursor-pointer"
+              />
+            ))
           }
           value={value}
           name={name}
           onChange={onChange}
           required={required}
-          error={errorText.trim()}
+          error={hasError}
         />
-        {errorText.trim() && <InputWithHelperText text={errorText} />}
+        {hasError && <InputWithHelperText text={errorText} />}
       </div>
     </div>
   );

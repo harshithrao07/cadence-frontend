@@ -10,7 +10,7 @@ export function CustomStepper({ activeStep, setActiveStep }) {
         lineClassName="bg-white/50"
         activeLineClassName="bg-white"
       >
-        {[0, 1, 2, 3].map((step) => (
+        {[0, 1, 2].map((step) => (
           <Step
             key={step}
             className="h-0 w-0 bg-transparent"

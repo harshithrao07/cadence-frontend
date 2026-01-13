@@ -1,30 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import Input from "@/components/Input";
+import Input from "@/components/auth/Input";
 import { Button, Checkbox } from "@material-tailwind/react";
-import { CustomStepper } from "@/components/CustomStepper";
-import DatePicker from "@/components/DatePicker";
-import ProfilePictureSelector from "@/components/ProfilePictureSelector";
+import { CustomStepper } from "@/components/auth/CustomStepper";
+import DatePicker from "@/components/auth/DatePicker";
 import Link from "next/link";
-import axios from "axios";
+import { AuthenticationResponseDTO, RegisterRequestDTO } from "@/types/Auth";
+import api from "@/lib/api";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 const Signup = () => {
-  const [signupBody, setSignupBody] = useState({
+  const [signupBody, setSignupBody] = useState<RegisterRequestDTO>({
+    name: "",
     email: "",
     password: "",
-    name: "",
-    dob: new Date(),
+    dateOfBirth: null,
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [activeStep, setActiveStep] = useState(0);
-  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [activeStep, setActiveStep] = useState<number>(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [invalidPasswordConditions, setInvalidPasswordConditions] = useState([
     false,
     false,
     false,
   ]);
+  const router = useRouter();
+  const [dateOfBirth, setDateOfBirth] = useState(null);
 
   const passwordConditions = [
     "1 letter",
@@ -33,64 +37,92 @@ const Signup = () => {
   ];
   const hasSpecialOrNumber = /[0-9!@#$%^&*(),.?":{}|<>]/;
 
-  const handleSubmit = () => {
-    console.log(signupBody);
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    console.log("Submitting signup form:", signupBody);
+    try {
+      setSignupBody((prev) => ({  
+        ...prev,
+        dateOfBirth: dateOfBirth,
+      }));
+
+      const response = await api.post(`/auth/v1/register`, {
+        ...signupBody,
+        dateOfBirth: dateOfBirth,
+      });
+
+      const authResponse: AuthenticationResponseDTO = response.data.data;
+      localStorage.setItem("auth_details", JSON.stringify(authResponse));
+
+      console.log("Registration success:", response.data);
+      toast.success("Registration successful!.");
+      router.push("/");
+    } catch (err: any) {
+      console.error("Registration failed:", err);
+
+      if (err.response) {
+        const { data } = err.response;
+
+        if (data?.data && typeof data.data === "object") {
+          Object.values(data.data).forEach((msg: any) => {
+            toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
+          });
+        } else {
+          toast.error(data?.message || "Something went wrong");
+        }
+      } else {
+        toast.error("Unable to connect to server");
+      }
+    }
   };
 
-  const validateStep = async (step) => {
+  const validateStep = async (step: number): Promise<boolean> => {
+    const newErrors: Record<string, string> = {};
+
     if (step === 0) {
       if (!signupBody.email.trim()) {
-        setError("Email is required");
-        return false;
-      }
+        newErrors.email = "Email is required";
+      } else if (!signupBody.email.includes("@")) {
+        newErrors.email = "Invalid email";
+      } else {
+        try {
+          const response = await api.post(
+            `/auth/v1/validateEmail`,
+            signupBody.email
+          );
 
-      if (!signupBody.email.includes("@")) {
-        setError("Invalid email");
-        return false;
-      }
-
-      const response = await axios.post(
-        process.env.NEXT_PUBLIC_SERVER_URL + "/auth/v1/validateEmail",
-        signupBody.email,
-        {
-          headers: {
-            "Content-Type": "text/plain",
-          },
+          if (response.data.data) {
+            newErrors.email = response.data.message;
+          }
+        } catch (err) {
+          console.error("Email validation failed:", err);
+          newErrors.email = "Unable to validate email";
         }
-      );
-
-      if (response.data.data) {
-        setError(response.data.message);
-        return false;
       }
     }
 
     if (step === 1) {
+      const hasSpecialOrNumber = /[0-9!@#$%^&*]/;
+
       if (!signupBody.password.trim()) {
-        setError("Password is required");
-        return false;
-      }
-
-      if (!hasSpecialOrNumber.test(signupBody.password)) {
-        setError("Password must contain a number or special character");
-        return false;
-      }
-
-      if (signupBody.password.length < 10) {
-        setError("Password must contain at least 10 characters");
-        return false;
+        newErrors.password = "Password is required";
+      } else if (!hasSpecialOrNumber.test(signupBody.password)) {
+        newErrors.password =
+          "Password must contain a number or special character";
+      } else if (signupBody.password.length < 10) {
+        newErrors.password = "Password must contain at least 10 characters";
       }
     }
 
     if (step === 2) {
       if (!signupBody.name.trim()) {
-        setError("Name is required");
-        return false;
+        newErrors.name = "Name is required";
       }
     }
 
-    setError("");
-    return true;
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (event) => {
@@ -102,11 +134,11 @@ const Signup = () => {
 
     if (name === "email") {
       if (value.trim().length > 0) {
-        setError("");
+        setErrors({});
       }
 
       if (value.includes("@")) {
-        setError("");
+        setErrors({});
       }
     } else if (name === "password") {
       const updatedConditions = [
@@ -120,12 +152,12 @@ const Signup = () => {
         updatedConditions[1] &&
         updatedConditions[2]
       ) {
-        setError("");
+        setErrors({});
       }
       setInvalidPasswordConditions(updatedConditions);
     } else if (name === "name") {
       if (value.trim().length > 0) {
-        setError("");
+        setErrors({});
       }
     }
   };
@@ -137,7 +169,7 @@ const Signup = () => {
   const handleNext = async () => {
     const isValid = await validateStep(activeStep);
     if (isValid) {
-      if (activeStep < 3) {
+      if (activeStep < 2) {
         setActiveStep((prev) => prev + 1);
       } else {
         handleSubmit();
@@ -149,10 +181,20 @@ const Signup = () => {
     setActiveStep((prev) => prev - 1);
   };
 
+  useEffect(() => {
+    setShowPassword(false);
+  }, [activeStep]);
+
   return (
     <div className="flex flex-col items-center h-screen justify-center">
       <div className="flex flex-col items-center justify-center gap-y-5">
-        <Image src="/cadence-logo.png" width={50} height={50} alt="Cadence" />
+        <Image
+          src="/images/cadence-logo.png"
+          width={50}
+          height={50}
+          alt="Cadence"
+          style={{ width: "auto", height: "auto" }}
+        />
         {activeStep == 0 && (
           <h1 className="text-5xl font-semibold text-center">
             Sign up to
@@ -192,7 +234,6 @@ const Signup = () => {
               )}
               {activeStep == 1 && <p>Create a password</p>}
               {activeStep == 2 && <p>Tell us about yourself</p>}
-              {activeStep == 3 && <p>Add a profile picture (Optional)</p>}
             </div>
           </div>
 
@@ -206,7 +247,10 @@ const Signup = () => {
                   value={signupBody.email}
                   onChange={handleChange}
                   required={true}
-                  errorText={error}
+                  errorText={errors["email"]}
+                  htmlFor={""}
+                  handleToggle={handleToggle}
+                  showPassword={false}
                 />
               </>
             )}
@@ -222,20 +266,22 @@ const Signup = () => {
                   handleToggle={handleToggle}
                   showPassword={showPassword}
                   required={true}
-                  errorText={error}
+                  errorText={errors["password"]}
+                  htmlFor={""}
                 />
                 <div className="mt-8 text-sm">
                   Your password must contain at least
                   <br />
                   {passwordConditions.map((condition, index) => (
-                    <div key={index}>
-                      <Checkbox
-                        disabled={true}
-                        checked={invalidPasswordConditions[index]}
-                        className="rounded-full h-3 w-3"
-                        label={condition}
-                        labelProps={{ className: "text-gray-100" }}
-                        icon={
+                    <Checkbox
+                      key={index}
+                      {...({
+                        disabled: true,
+                        checked: invalidPasswordConditions[index],
+                        className: "rounded-full h-3 w-3",
+                        label: condition,
+                        labelProps: { className: "text-gray-100" },
+                        icon: (
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"
@@ -248,11 +294,10 @@ const Signup = () => {
                               clipRule="evenodd"
                             />
                           </svg>
-                        }
-                        ripple={false}
-                      />
-                      <br />
-                    </div>
+                        ),
+                        ripple: false,
+                      } as any)}
+                    />
                   ))}
                 </div>
               </div>
@@ -271,33 +316,33 @@ const Signup = () => {
                     onChange={handleChange}
                     required={true}
                     placeholder={"Name"}
-                    errorText={error}
+                    errorText={errors["name"]}
+                    htmlFor={""}
+                    handleToggle={handleToggle}
+                    showPassword={false}
                   />
                 </div>
                 <div className="flex flex-col">
                   <label className="text-sm text-gray-500 mb-2">
                     Add your date of birth — optional.
                   </label>
-                  <DatePicker />
+                  <DatePicker setDateOfBirth={setDateOfBirth} />
                 </div>
-              </div>
-            )}
-
-            {activeStep === 3 && (
-              <div className="flex flex-col">
-                <ProfilePictureSelector />
               </div>
             )}
 
             <div className="mt-6">
               <Button
-                ripple={false}
-                color="red"
-                className="w-full text-black rounded-full shadow-none hover:shadow-none hover:bg-red-400 normal-case text-md"
-                variant="filled"
-                onClick={handleNext}
+                {...({
+                  ripple: false,
+                  color: "red",
+                  className:
+                    "w-full text-black rounded-full shadow-none hover:shadow-none hover:bg-red-400 normal-case text-md",
+                  variant: "filled",
+                  onClick: handleNext,
+                } as any)}
               >
-                {activeStep != 3 ? "Next" : "Sign up"}
+                {activeStep !== 2 ? "Next" : "Sign up"}
               </Button>
             </div>
           </form>
@@ -311,10 +356,13 @@ const Signup = () => {
               </div>
 
               <Button
-                variant="outlined"
-                ripple={false}
-                color="blue-gray"
-                className="relative w-full rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100"
+                {...({
+                  variant: "outlined",
+                  color: "blue-gray",
+                  onClick: () => console.log("Google signup"),
+                  className:
+                    "relative w-full rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100",
+                } as any)}
               >
                 <Image
                   src="https://docs.material-tailwind.com/icons/google.svg"

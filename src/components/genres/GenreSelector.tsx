@@ -13,6 +13,19 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
   const [selectedGenres, setSelectedGenres] = useState<GenrePreviewDTO[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
+  const { genres: allGenres } = useGenres();
+
+  // Initialize selectedGenres from IDs on mount
+  useEffect(() => {
+    if (allGenres.length > 0) {
+      const initial = selectedGenreIds
+        .map(id => allGenres.find(g => g.id === id))
+        .filter((g): g is GenrePreviewDTO => g !== undefined);
+
+      setSelectedGenres(initial);
+    }
+  }, [selectedGenreIds, allGenres]);
+
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!query.trim()) {
@@ -96,17 +109,18 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-black" />
           <input
             value={query}
+            autoComplete="off"
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query && setShowDropdown(true)}
             placeholder="Search or add genres..."
-            className="w-full bg-zinc-900 text-black px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
+            className="w-full bg-zinc-900 text-white px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
           />
         </div>
 
         {showDropdown && (query || results.length > 0) && (
-          <div className="absolute z-10 w-full mt-2 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+          <div className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
             {loading && (
-              <div className="px-4 py-3 text-sm text-zinc-400">
+              <div className="px-4 py-3 text-sm text-zinc-500">
                 Searching...
               </div>
             )}
@@ -114,10 +128,10 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
             {!loading && results.length === 0 && query && (
               <button
                 onClick={handleAddGenre}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-100 transition-colors text-left"
               >
                 <Plus size={18} className="text-red-500" />
-                <span className="text-white">Create &quot;{query}&quot;</span>
+                <span className="text-black">Create &quot;{query}&quot;</span>
               </button>
             )}
 
@@ -125,9 +139,9 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
               <button
                 key={genre.id}
                 onClick={() => toggleGenre(genre)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800 transition-colors text-left"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-100 transition-colors text-left"
               >
-                <span className="text-white">{genre.type}</span>
+                <span className="text-black">{genre.type}</span>
                 {selectedGenreIds.includes(genre.id) && (
                   <span className="text-red-500 text-xs font-semibold">
                     ✓ Selected

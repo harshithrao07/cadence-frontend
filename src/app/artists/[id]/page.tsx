@@ -184,7 +184,29 @@ export default function ArtistProfile() {
                     height={40}
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
-                  <div className="font-semibold truncate">{track.title}</div>
+                  <div>
+                    <div className="font-semibold truncate">{track.title}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {track.artists?.length > 0 ? (
+                        track.artists.map((artist, artistIndex) => (
+                          <span key={artist.id}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/artists/${artist.id}`);
+                              }}
+                              className="hover:text-red-400 transition underline"
+                            >
+                              {artist.name}
+                            </button>
+                            {artistIndex < track.artists.length - 1 && ", "}
+                          </span>
+                        ))
+                      ) : (
+                        "Unknown Artist"
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 justify-end">
                   <button
@@ -192,11 +214,10 @@ export default function ArtistProfile() {
                     className="opacity-0 group-hover:opacity-100 transition"
                   >
                     <Heart
-                      className={`w-5 h-5 ${
-                        likedSongs.has(track.songId)
+                      className={`w-5 h-5 ${likedSongs.has(track.songId)
                           ? "fill-red-500 text-red-500"
                           : "text-gray-400"
-                      }`}
+                        }`}
                     />
                   </button>
                   <div className="text-sm text-gray-400 w-16 text-right">

@@ -24,6 +24,7 @@ export interface TrackPreviewDTO {
   totalPlays: number;
   recordId: string;
   recordTitle: string;
+  artists: ArtistPreviewDTO[];
 }
 
 

@@ -40,29 +40,34 @@ export const ArtistsProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(false);
   const [searchKey, setSearchKey] = useState<string | null>(null);
 
-  const fetchArtists = async (pageToLoad: number, replace = false): Promise<ArtistPreviewDTO[]> => {
+  const fetchArtists = async (pageToLoad: number, replace = false, query?: string): Promise<ArtistPreviewDTO[]> => {
     if (pathname.startsWith("/auth")) return [];
 
     setLoading(true);
     try {
+      const finalSearchKey = query !== undefined ? query : searchKey;
+
       const res = await api.get<ApiResponse<Page<ArtistPreviewDTO>>>(
         "/api/v1/artist/all",
         {
           params: {
             page: pageToLoad,
             size: PAGE_SIZE,
-            key: searchKey ?? undefined,
+            key: finalSearchKey || undefined,
           },
         }
       );
 
       const pageData = res.data.data;
 
-      setArtists((prev) =>
-        replace ? pageData.content : [...prev, ...pageData.content]
-      );
-      setHasMore(!pageData.last);
-      setPage(pageData.page);
+      if (query === undefined) {
+        // Only update global artist list if this is a global state search
+        setArtists((prev) =>
+          replace ? pageData.content : [...prev, ...pageData.content]
+        );
+        setHasMore(!pageData.last);
+        setPage(pageData.page);
+      }
 
       return pageData.content;
     } catch (err) {
@@ -87,11 +92,8 @@ export const ArtistsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const searchArtists = async (query: string): Promise<ArtistPreviewDTO[]> => {
     setSearchKey(query || null);
-    setArtists([]);
-    setPage(0);
-    setHasMore(true);
-    const results = await fetchArtists(0, true);
-    return results;
+    // When performing a global search, update the global state
+    return await fetchArtists(0, true, query || "");
   };
 
   const getArtistById = (id: string) =>

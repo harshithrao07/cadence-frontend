@@ -1,3 +1,5 @@
+import { ArtistPreviewDTO } from "./Artists";
+
 export enum RecordType {
   ALBUM = "ALBUM",
   SINGLE = "SINGLE",
@@ -22,6 +24,7 @@ export interface RecordPreviewDTO {
   coverUrl: string;
   releaseTimestamp: number;
   recordType: RecordType;
+  artists: ArtistPreviewDTO[];
 }
 
 export interface NewRecordDTO {

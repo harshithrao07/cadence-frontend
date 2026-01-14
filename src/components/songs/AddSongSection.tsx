@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { X, Music, Edit2, Play, Pause } from "lucide-react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Trash2, Music, Edit2, Play, Pause } from "lucide-react";
 import { GenreSelector } from "../genres/GenreSelector";
 import { SongFilePicker } from "./SongFIlePicker";
 import { RECORD_LIMITS } from "@/types/Record";
@@ -10,18 +10,20 @@ import { ArtistSelector } from "../artists/ArtistSelector";
 import { EachNewSongDTO } from "@/types/Song";
 import { RecordType } from "@/types/Record";
 import { ArtistPreviewDTO } from "@/types/Artists";
+import { useGenres } from "@/context/GenreContext";
 
 const AddSongSection = ({
-  recordArtistIds = [],
+  selectedArtists = [],
   recordType,
   recordTitle = "",
   onSongsChange,
   onSongFilesChange,
   initialSongs = [],
   isUpdate = false,
-  onSongUpdate,
-  selectedArtists = [], // Array of ArtistPreviewDTO objects
+  fullExistingSongs = [], // Array of SongInRecordDTO objects for update mode
 }) => {
+  const recordArtistIds = React.useMemo(() => selectedArtists.map(a => a.id), [selectedArtists]);
+
   const [songs, setSongs] = useState<EachNewSongDTO[]>(initialSongs);
   const [songFiles, setSongFiles] = useState<Map<string, File>>(new Map());
   const [currentFile, setCurrentFile] = useState<File | undefined>(undefined);
@@ -41,6 +43,9 @@ const AddSongSection = ({
   const [genreSelectorKey, setGenreSelectorKey] = useState(0);
   const [filePickerKey, setFilePickerKey] = useState(0);
 
+  // Track ALL artists encountered (record + featured) for lookup when displaying songs
+  const [allEncounteredArtists, setAllEncounteredArtists] = useState<Map<string, ArtistPreviewDTO>>(new Map());
+
   const maxSongsAllowed = RECORD_LIMITS[recordType] ?? Infinity;
   const hasReachedLimit = songs.length >= maxSongsAllowed;
   const hasGenre = song.genreIds.length > 0;
@@ -48,6 +53,46 @@ const AddSongSection = ({
   // State for playing songs
   const [playingSongIndex, setPlayingSongIndex] = useState<number | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+
+  // Track previous recordArtistIds to identify featured artists during sync
+  const prevRecordArtistIdsRef = useRef<string[]>(recordArtistIds);
+
+  // Sync Record Title to first song if RecordType.SINGLE
+  useEffect(() => {
+    if (recordType === RecordType.SINGLE && recordTitle.trim()) {
+      setSongs(prevSongs => {
+        if (prevSongs.length === 0) return prevSongs;
+        const newSongs = [...prevSongs];
+        newSongs[0] = { ...newSongs[0], title: recordTitle.trim() };
+        return newSongs;
+      });
+    }
+  }, [recordTitle, recordType]);
+
+  // Sync Record Artists to ALL songs
+  useEffect(() => {
+    const prevIds = prevRecordArtistIdsRef.current;
+
+    setSongs(prevSongs => {
+      if (prevSongs.length === 0) return prevSongs;
+
+      return prevSongs.map(s => {
+        // Find featured artists: they were in the song but NOT in the previous record artists
+        const featuredIds = s.artistIds.filter(id => !prevIds.includes(id));
+
+        // New artist set = new record artists + existing featured artists
+        // Use a Set to avoid duplicates if any overlap 
+        const newArtistIds = Array.from(new Set([...recordArtistIds, ...featuredIds]));
+
+        return {
+          ...s,
+          artistIds: newArtistIds
+        };
+      });
+    });
+
+    prevRecordArtistIdsRef.current = recordArtistIds;
+  }, [recordArtistIds]);
 
   useEffect(() => {
     onSongsChange?.(songs);
@@ -68,7 +113,7 @@ const AddSongSection = ({
   }, [audioElement]);
 
   useEffect(() => {
-    if (!editingSongIndex) {
+    if (editingSongIndex === null) {
       setSong((prev) => ({
         ...prev,
         artistIds: recordArtistIds,
@@ -77,13 +122,61 @@ const AddSongSection = ({
   }, [recordArtistIds, editingSongIndex]);
 
   useEffect(() => {
-    if (recordType === RecordType.SINGLE && recordTitle.trim() && !editingSongIndex) {
+    if (recordType === RecordType.SINGLE && recordTitle.trim() && editingSongIndex === null) {
       setSong((prev) => ({
         ...prev,
         title: recordTitle.trim(),
       }));
     }
   }, [recordTitle, recordType, editingSongIndex]);
+
+  const { genres, fetchGenres } = useGenres();
+
+  // Fetch genres on mount
+  useEffect(() => {
+    if (genres.length === 0) {
+      fetchGenres();
+    }
+  }, []);
+
+  // Update allEncounteredArtists when selectedArtists change
+  useEffect(() => {
+    setAllEncounteredArtists(prevMap => {
+      const newMap = new Map(prevMap);
+      let changed = false;
+
+      // Add record artists (these are passed as objects from parent)
+      selectedArtists.forEach(artist => {
+        if (!newMap.has(artist.id)) {
+          newMap.set(artist.id, artist);
+          changed = true;
+        }
+      });
+
+      return changed ? newMap : prevMap;
+    });
+  }, [selectedArtists]);
+
+  // Update allEncounteredArtists when fullExistingSongs change (for featured artists in update mode)
+  useEffect(() => {
+    if (!isUpdate || !fullExistingSongs.length) return;
+
+    setAllEncounteredArtists(prevMap => {
+      const newMap = new Map(prevMap);
+      let changed = false;
+
+      fullExistingSongs.forEach(song => {
+        song.artists?.forEach(artist => {
+          if (!newMap.has(artist.id)) {
+            newMap.set(artist.id, artist);
+            changed = true;
+          }
+        });
+      });
+
+      return changed ? newMap : prevMap;
+    });
+  }, [fullExistingSongs, isUpdate]);
 
   const resetForm = () => {
     setSong({
@@ -97,6 +190,7 @@ const AddSongSection = ({
     });
     setCurrentFile(undefined);
     setEditingSongIndex(null);
+
     setArtistSelectorKey((k) => k + 1);
     setGenreSelectorKey((k) => k + 1);
     setFilePickerKey((k) => k + 1);
@@ -279,7 +373,13 @@ const AddSongSection = ({
     // The picker accepts `selectedFile`.
     setCurrentFile(songFiles.get(songToEdit.title.trim()));
 
+    // Restore featured artist IDs (artists that are not record artists)
+    const featuredIds = songToEdit.artistIds.filter(
+      id => !recordArtistIds.includes(id)
+    );
+
     // Force re-render of components to reflect new state
+
     setArtistSelectorKey(prev => prev + 1);
     setGenreSelectorKey(prev => prev + 1);
     setFilePickerKey(prev => prev + 1);
@@ -357,10 +457,22 @@ const AddSongSection = ({
   };
 
   const getArtistNames = (artistIds: string[]) => {
-    return artistIds
-      .map(id => selectedArtists.find(artist => artist.id === id)?.name)
+    // Use the persistent map of all encountered artists
+    const names = artistIds
+      .map(id => {
+        const artist = allEncounteredArtists.get(id);
+        return artist?.name;
+      })
       .filter(Boolean)
       .join(", ") || "Unknown Artist";
+    return names;
+  };
+
+  const getGenreNames = (genreIds: string[]) => {
+    return genreIds
+      .map(id => genres.find(genre => genre.id === id)?.type)
+      .filter(Boolean)
+      .join(", ") || "No genre";
   };
 
   return (
@@ -428,10 +540,26 @@ const AddSongSection = ({
           <ArtistSelector
             key={`artist-${artistSelectorKey}`}
             selectedArtistIds={song.artistIds}
-            setSelectedArtistIds={(ids) =>
-              setSong((prev) => ({ ...prev, artistIds: ids }))
-            }
+            setSelectedArtistIds={(ids) => {
+              setSong((prev) => ({ ...prev, artistIds: ids }));
+            }}
+            onArtistsChange={useCallback((artists: ArtistPreviewDTO[]) => {
+              // Ensure all selected artists are our lookup map
+
+              setAllEncounteredArtists(prev => {
+                const newMap = new Map(prev);
+                let changed = false;
+                artists.forEach(a => {
+                  if (!newMap.has(a.id)) {
+                    newMap.set(a.id, a);
+                    changed = true;
+                  }
+                });
+                return changed ? newMap : prev;
+              });
+            }, [recordArtistIds])}
             recordArtistIds={recordArtistIds}
+            artistsMap={allEncounteredArtists}
           />
 
           <SongFilePicker
@@ -557,7 +685,7 @@ const AddSongSection = ({
                       {getArtistNames(s.artistIds)}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      {formatDuration(s.totalDuration)}
+                      {getGenreNames(s.genreIds)} • {formatDuration(s.totalDuration)}
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -588,7 +716,7 @@ const AddSongSection = ({
                       className="opacity-0 group-hover:opacity-100 p-2 hover:bg-zinc-700 rounded-lg transition-all"
                       title="Remove song"
                     >
-                      <X className="w-5 h-5 text-zinc-400 hover:text-red-500" />
+                      <Trash2 className="w-5 h-5 text-zinc-400 hover:text-red-500" />
                     </button>
                   </div>
                 </div>

@@ -75,10 +75,7 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
     recordId: string
   ): Promise<RecordPreviewDTO | null> => {
     // 🔍 Optional: try cache first
-    for (const artistRecords of Object.values(recordsByArtistId)) {
-      const found = artistRecords.find((r) => r.id === recordId);
-      if (found) return found;
-    }
+    // Note: The cache stores RecordPreviewDTO.
 
     try {
       const res = await api.get<ApiResponse<RecordPreviewDTO>>(

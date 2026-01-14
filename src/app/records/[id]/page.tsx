@@ -43,8 +43,9 @@ export default function RecordPage() {
     id: "",
     title: "Loading...",
     coverUrl: "",
-    recordType: RecordType.ALBUM,
     releaseTimestamp: Date.now(),
+    recordType: RecordType.ALBUM,
+    artists: [],
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
@@ -108,26 +109,37 @@ export default function RecordPage() {
           height={224}
         />
         <div className="flex flex-col justify-end">
+          <span className="text-sm font-bold uppercase tracking-wider mb-2">
+            {record.recordType}
+          </span>
           <h1 className="text-5xl md:text-7xl font-bold mb-6">
             {record.title}
           </h1>
+          {songs.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {(() => {
+                const uniqueGenres = Array.from(
+                  new Map(
+                    songs
+                      .flatMap((s) => s.genres || [])
+                      .map((g) => [g.id, g.type])
+                  ).entries()
+                );
+                return uniqueGenres.map(([id, type]) => (
+                  <span
+                    key={id}
+                    className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full text-xs font-medium transition cursor-default"
+                  >
+                    {type}
+                  </span>
+                ));
+              })()}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm">
             <div className="font-medium flex flex-wrap gap-1">
-              {(() => {
-                // Collect unique artists from all songs
-                const uniqueArtists = new Map<string, { id: string; name: string }>();
-                songs.forEach(song => {
-                  song.artists?.forEach(artist => {
-                    if (!uniqueArtists.has(artist.id)) {
-                      uniqueArtists.set(artist.id, artist);
-                    }
-                  });
-                });
-
-                const artists = Array.from(uniqueArtists.values());
-                if (artists.length === 0) return <span>Unknown Artist</span>;
-
-                return artists.map((artist, index) => (
+              {record.artists?.length > 0 ? (
+                record.artists.map((artist, index) => (
                   <span key={artist.id}>
                     <button
                       onClick={() => router.push(`/artists/${artist.id}`)}
@@ -135,10 +147,12 @@ export default function RecordPage() {
                     >
                       {artist.name}
                     </button>
-                    {index < artists.length - 1 && ", "}
+                    {index < record.artists.length - 1 && ", "}
                   </span>
-                ));
-              })()}
+                ))
+              ) : (
+                <span>Unknown Artist</span>
+              )}
             </div>
             <span>•</span>
             <span>{formatDate(record.releaseTimestamp)}</span>
@@ -237,20 +251,33 @@ export default function RecordPage() {
                   {song.title}
                 </div>
                 <div className="text-sm text-gray-400">
-                  {song.artists?.map((artist, index) => (
-                    <span key={artist.id}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/artists/${artist.id}`);
-                        }}
-                        className="hover:text-red-400 transition underline"
-                      >
-                        {artist.name}
-                      </button>
-                      {index < (song.artists?.length || 0) - 1 && ", "}
-                    </span>
-                  )) || "Unknown Artist"}
+                  {(() => {
+                    const recordArtistIds = new Set(record.artists?.map((a) => a.id) || []);
+                    const sortedArtists = [...(song.artists || [])].sort((a, b) => {
+                      const aIsPrimary = recordArtistIds.has(a.id);
+                      const bIsPrimary = recordArtistIds.has(b.id);
+                      if (aIsPrimary && !bIsPrimary) return -1;
+                      if (!aIsPrimary && bIsPrimary) return 1;
+                      return 0;
+                    });
+
+                    if (sortedArtists.length === 0) return "Unknown Artist";
+
+                    return sortedArtists.map((artist, artistIndex) => (
+                      <span key={artist.id}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/artists/${artist.id}`);
+                          }}
+                          className="hover:text-red-400 transition underline"
+                        >
+                          {artist.name}
+                        </button>
+                        {artistIndex < sortedArtists.length - 1 && ", "}
+                      </span>
+                    ));
+                  })()}
                 </div>
               </div>
             </div>

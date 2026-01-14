@@ -9,12 +9,6 @@ import { RecordPreviewDTO, RecordType } from "../../types/Record";
 import { SongInRecordDTO } from "../../types/Song";
 import { Clock, ArrowLeft } from "lucide-react";
 
-const formatDuration = (seconds: number) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-};
-
 const formatDate = (timestamp: number) => {
   return new Date(timestamp).toLocaleDateString("en-US", {
     year: "numeric",

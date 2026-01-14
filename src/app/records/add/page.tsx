@@ -41,14 +41,8 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
     title: existingRecord?.title || "",
     releaseTimestamp: existingRecord ? new Date(existingRecord.releaseTimestamp).toISOString().split('T')[0] : "",
     recordType: existingRecord?.recordType || null,
-    artistIds: isUpdate && existingSongs ? [...new Set(existingSongs.flatMap(song => song.artists?.map(a => a.id) || []))] : [],
+    artistIds: isUpdate && existingRecord?.artists ? existingRecord.artists.map(a => a.id) : [],
   });
-  // ... (existing code)
-
-
-  // ... (existing code)
-
-
   const [songs, setSongs] = useState<EachNewSongDTO[]>(() => {
     if (isUpdate && existingSongs) {
       return existingSongs.map((song, index) => ({
@@ -66,21 +60,9 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const [artistSearch, setArtistSearch] = useState("");
   const [artistResults, setArtistResults] = useState<ArtistPreviewDTO[]>([]);
   const [artistLoading, setArtistLoading] = useState(false);
-  const [selectedArtists, setSelectedArtists] = useState<ArtistPreviewDTO[]>(() => {
-    if (isUpdate && existingSongs) {
-      // Collect unique artists from all existing songs
-      const artistMap = new Map<string, ArtistPreviewDTO>();
-      existingSongs.forEach(song => {
-        song.artists?.forEach(artist => {
-          if (!artistMap.has(artist.id)) {
-            artistMap.set(artist.id, artist);
-          }
-        });
-      });
-      return Array.from(artistMap.values());
-    }
-    return [];
-  });
+  const [selectedArtists, setSelectedArtists] = useState<ArtistPreviewDTO[]>(
+    isUpdate && existingRecord?.artists ? existingRecord.artists : []
+  );
 
   const handleSongsChange = (updatedSongs: EachNewSongDTO[]) => {
     setSongs(updatedSongs);
@@ -93,8 +75,6 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const handleSongUpdate = async (updatedSong: EachNewSongDTO) => {
     // TODO: Implement individual song update API call
     // For now, just return a resolved promise
-    console.log("Updating song:", updatedSong);
-    // Example: await api.put(`/api/v1/song/update/${updatedSong.id}`, updatedSong);
   };
 
   const recordTypes = [
@@ -209,10 +189,10 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
               `record cover_url ${existingRecord.id} ${extension}`
             );
 
-            const uploadRes = await api.post<ApiResponse<FileUploadResult[]>>("/api/v1/files", formData, {
+            const uploadRes = await api.post<FileUploadResult[]>("/api/v1/files", formData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
-            coverUrl = uploadRes.data.data[0].url;
+            coverUrl = uploadRes.data[0].url;
           }
           toast.success("Record updated successfully");
         }
@@ -235,10 +215,10 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
               `record cover_url ${recordId} ${extension}`
             );
 
-            const uploadRes = await api.post<ApiResponse<FileUploadResult[]>>("/api/v1/files", formData, {
+            const uploadRes = await api.post<FileUploadResult[]>("/api/v1/files", formData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
-            let coverUrl = uploadRes.data.data[0].url;
+            coverUrl = uploadRes.data[0].url;
 
             // Update existing songs
             for (let i = 0; i < existingSongs.length; i++) {
@@ -516,6 +496,7 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
                 <input
                   placeholder="Search artist..."
                   value={artistSearch}
+                  autoComplete="off"
                   onChange={(e) => setArtistSearch(e.target.value)}
                   className="w-full px-4 py-3 pr-10 bg-gray-800 border border-gray-700 rounded-lg outline-none focus:border-red-500"
                 />
@@ -635,15 +616,14 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
             )}
 
             <AddSongSection
-              recordArtistIds={selectedArtists.map((a) => a.id)}
+              selectedArtists={selectedArtists}
               recordType={selectedType}
               recordTitle={newRecord.title}
               onSongsChange={handleSongsChange}
               onSongFilesChange={handleSongFilesChange}
               initialSongs={songs}
               isUpdate={isUpdate}
-              onSongUpdate={isUpdate ? handleSongUpdate : undefined}
-              selectedArtists={selectedArtists}
+              fullExistingSongs={existingSongs}
             />
 
             {/* Actions */}

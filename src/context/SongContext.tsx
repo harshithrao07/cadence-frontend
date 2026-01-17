@@ -26,14 +26,19 @@ export const SongProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [songsByRecordId, setSongsByRecordId] = useState<Record<string, SongInRecordDTO[]>>({});
   const [loading, setLoading] = useState(false);
+  const songsByRecordIdRef = React.useRef(songsByRecordId);
 
-  const fetchSongsByRecordId = async (
+  React.useEffect(() => {
+    songsByRecordIdRef.current = songsByRecordId;
+  }, [songsByRecordId]);
+
+  const fetchSongsByRecordId = React.useCallback(async (
     recordId: string,
     forceRefresh = false
   ): Promise<SongInRecordDTO[] | null> => {
     // ✅ Cache hit
-    if (!forceRefresh && songsByRecordId[recordId]) {
-      return songsByRecordId[recordId];
+    if (!forceRefresh && songsByRecordIdRef.current[recordId]) {
+      return songsByRecordIdRef.current[recordId];
     }
 
     setLoading(true);
@@ -59,7 +64,7 @@ export const SongProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     return null;
-  };
+  }, []);
 
   return (
     <SongContext.Provider

@@ -33,15 +33,20 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
     Record<string, RecordPreviewDTO[]>
   >({});
   const [loading, setLoading] = useState(false);
+  const recordsByArtistIdRef = React.useRef(recordsByArtistId);
 
-  const fetchRecordsByArtistId = async (
+  React.useEffect(() => {
+    recordsByArtistIdRef.current = recordsByArtistId;
+  }, [recordsByArtistId]);
+
+  const fetchRecordsByArtistId = React.useCallback(async (
     artistId: string,
     forceRefresh = false
   ): Promise<RecordPreviewDTO[] | null> => {
     // ✅ Cache hit
-    if (!forceRefresh && recordsByArtistId[artistId]) {
-      setRecords(recordsByArtistId[artistId]);
-      return recordsByArtistId[artistId];
+    if (!forceRefresh && recordsByArtistIdRef.current[artistId]) {
+      setRecords(recordsByArtistIdRef.current[artistId]);
+      return recordsByArtistIdRef.current[artistId];
     }
 
     setLoading(true);
@@ -69,9 +74,9 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     return null;
-  };
+  }, []);
 
-  const getRecordById = async (
+  const getRecordById = React.useCallback(async (
     recordId: string
   ): Promise<RecordPreviewDTO | null> => {
     // 🔍 Optional: try cache first
@@ -90,7 +95,7 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     return null;
-  };
+  }, []);
 
   return (
     <RecordContext.Provider

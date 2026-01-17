@@ -12,18 +12,19 @@ import {
 import { useParams } from "next/navigation";
 import api from "@/lib/api";
 import { ArtistProfileDTO } from "@/types/Artists";
-import { TrackPreviewDTO } from "@/types/Song";
 import { RecordPreviewDTO } from "@/types/Record";
 import { ApiResponse } from "@/types/ApiResponse";
 import Image from "next/image";
 import { useArtists } from "@/context/ArtistContext";
 import { useUser } from "@/context/UserContext";
 import { useRouter } from "next/navigation";
+import { usePlayer } from "@/context/PlayerContext";
+import { SongInRecordDTO, TrackPreviewDTO } from "@/types/Song";
 
 export default function ArtistProfile() {
   const { getArtistById } = useArtists();
   const { isAdmin } = useUser();
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { playSong, currentSong, isPlaying: isGlobalPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
   const [likedSongs, setLikedSongs] = useState(new Set());
   const { id } = useParams();
   const [artist, setArtist] = useState<ArtistProfileDTO>({
@@ -90,6 +91,26 @@ export default function ArtistProfile() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const isCurrentSongPlaying = (songId: string) => {
+    return currentSong?.songId === songId && isGlobalPlaying;
+  };
+
+  const handlePlayPopularSong = (track: TrackPreviewDTO) => {
+    // Map TrackPreviewDTO to SongInRecordDTO for the player
+    const songToPlay: SongInRecordDTO = {
+      songId: track.songId,
+      title: track.title,
+      totalDuration: track.totalDuration,
+      coverUrl: track.coverUrl,
+      artists: track.artists,
+      createdBy: [], // Optional
+      songUrl: "", // Will be constructed in playSong
+      order: 0,
+      genres: []
+    };
+    playSong(songToPlay);
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Hero Section */}
@@ -130,10 +151,18 @@ export default function ArtistProfile() {
           {/* Left controls */}
           <div className="flex items-center gap-6">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                if (popularSongs.length > 0) {
+                  if (isCurrentSongPlaying(popularSongs[0].songId)) {
+                    toggleGlobalPlay();
+                  } else {
+                    handlePlayPopularSong(popularSongs[0]);
+                  }
+                }
+              }}
               className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 hover:scale-105 transition"
             >
-              {isPlaying ? (
+              {popularSongs.length > 0 && isCurrentSongPlaying(popularSongs[0].songId) ? (
                 <Pause fill="black" className="text-black" />
               ) : (
                 <Play fill="black" className="text-black ml-1" />
@@ -170,11 +199,26 @@ export default function ArtistProfile() {
                 key={track.songId}
                 className="grid grid-cols-[auto_auto_1fr_auto] gap-4 items-center p-2 rounded hover:bg-white/10 group transition"
               >
-                <div className="w-8 text-gray-400 group-hover:hidden text-center">
-                  {index + 1}
+                <div className="w-8 text-gray-400 group-hover:hidden text-center flex items-center justify-center">
+                  {isCurrentSongPlaying(track.songId) ? (
+                    <div className="flex gap-0.5 items-end h-3">
+                      <span className="w-0.5 bg-red-500 animate-pulse h-1.5"></span>
+                      <span className="w-0.5 bg-red-500 animate-pulse h-3" style={{ animationDelay: "0.2s" }}></span>
+                      <span className="w-0.5 bg-red-500 animate-pulse h-2" style={{ animationDelay: "0.4s" }}></span>
+                    </div>
+                  ) : (
+                    index + 1
+                  )}
                 </div>
-                <button className="w-8 hidden group-hover:flex justify-center">
-                  <Play fill="white" className="w-4 h-4" />
+                <button
+                  onClick={() => handlePlayPopularSong(track)}
+                  className="w-8 hidden group-hover:flex justify-center"
+                >
+                  {isCurrentSongPlaying(track.songId) ? (
+                    <Pause fill="white" className="w-4 h-4" />
+                  ) : (
+                    <Play fill="white" className="w-4 h-4" />
+                  )}
                 </button>
                 <div className="min-w-0 flex items-center gap-3">
                   <Image
@@ -185,7 +229,9 @@ export default function ArtistProfile() {
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
                   <div>
-                    <div className="font-semibold truncate">{track.title}</div>
+                    <div className={`font-semibold truncate ${isCurrentSongPlaying(track.songId) ? "text-red-500" : "text-white"}`}>
+                      {track.title}
+                    </div>
                     <div className="text-xs text-gray-400 mt-0.5">
                       {track.artists?.length > 0 ? (
                         track.artists.map((artist, artistIndex) => (
@@ -215,8 +261,8 @@ export default function ArtistProfile() {
                   >
                     <Heart
                       className={`w-5 h-5 ${likedSongs.has(track.songId)
-                          ? "fill-red-500 text-red-500"
-                          : "text-gray-400"
+                        ? "fill-red-500 text-red-500"
+                        : "text-gray-400"
                         }`}
                     />
                   </button>

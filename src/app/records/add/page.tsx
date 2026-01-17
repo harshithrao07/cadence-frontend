@@ -173,7 +173,7 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
 
         const updateRecord = {
           title: recordDTO.title,
-          releaseTimestamp: recordDTO.title,
+          releaseTimestamp: recordDTO.releaseTimestamp,
           artistIds: recordDTO.artistIds
         }
         const res = await api.put(`/api/v1/record/update/${existingRecord.id}`, updateRecord);
@@ -194,7 +194,32 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
             });
             coverUrl = uploadRes.data[0].url;
           }
+
+          // Update existing songs
+          for (let i = 0; i < existingSongs.length; i++) {
+            const existingSong = existingSongs[i];
+            const updatedSongData = songs[i];
+
+            if (existingSong && updatedSongData) {
+              const updatedSong: UpdateSongDTO = {
+                title: updatedSongData.title,
+                genreIds: updatedSongData.genreIds,
+                artistIds: updatedSongData.artistIds,
+                totalDuration: updatedSongData.totalDuration,
+                coverUrl: coverUrl
+              };
+
+              await api.put(
+                `/api/v1/song/update/${existingSong.songId}`,
+                updatedSong
+              );
+            }
+          }
+
           toast.success("Record updated successfully");
+          if (onUpdateSuccess) {
+            onUpdateSuccess();
+          }
         }
       } else {
         // Handle create logic (existing code)
@@ -219,27 +244,6 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
               headers: { "Content-Type": "multipart/form-data" },
             });
             coverUrl = uploadRes.data[0].url;
-
-            // Update existing songs
-            for (let i = 0; i < existingSongs.length; i++) {
-              const existingSong = existingSongs[i];
-              const updatedSongData = songs[i];
-
-              if (existingSong && updatedSongData) {
-                const updatedSong: UpdateSongDTO = {
-                  title: updatedSongData.title,
-                  genreIds: updatedSongData.genreIds,
-                  artistIds: updatedSongData.artistIds,
-                  totalDuration: updatedSongData.totalDuration,
-                  coverUrl: coverUrl
-                };
-
-                await api.post<ApiResponse<AddSongResponseDTO[]>>(
-                  `/api/v1/song/update/${existingSong.songId}`,
-                  updatedSong
-                );
-              }
-            }
           }
 
           if (songs.length > 0) {

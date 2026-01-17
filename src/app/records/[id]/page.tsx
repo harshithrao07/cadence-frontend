@@ -2,6 +2,7 @@
 
 import { useRecords } from "@/context/RecordContext";
 import { useSongs } from "@/context/SongContext";
+import { usePlayer } from "@/context/PlayerContext";
 import { useUser } from "@/context/UserContext";
 import { RecordPreviewDTO, RecordType } from "@/types/Record";
 import { SongInRecordDTO } from "@/types/Song";
@@ -34,8 +35,8 @@ export default function RecordPage() {
   const router = useRouter();
   const { getRecordById } = useRecords();
   const { fetchSongsByRecordId } = useSongs();
+  const { playSong, currentSong, isPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
   const { isAdmin } = useUser();
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
   const [songs, setSongs] = useState<SongInRecordDTO[]>([]);
@@ -49,23 +50,23 @@ export default function RecordPage() {
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
+  const fetchData = async () => {
+    const recordId = Array.isArray(id) ? id[0] : id;
+    if (recordId) {
+      const record = await getRecordById(recordId);
+      if (record) {
+        setRecord(record);
+      }
+      const songs = await fetchSongsByRecordId(recordId, true);
+      if (songs) {
+        setSongs(songs);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
-    const recordId = Array.isArray(id) ? id[0] : id;
-
-    const fetchRecord = async () => {
-      if (recordId) {
-        const record = await getRecordById(recordId);
-        if (record) {
-          setRecord(record);
-        }
-        const songs = await fetchSongsByRecordId(recordId);
-        if (songs) {
-          setSongs(songs);
-        }
-      }
-    };
-    fetchRecord();
+    fetchData();
   }, [id, getRecordById, fetchSongsByRecordId]);
 
   const totalDuration = songs.reduce(
@@ -82,8 +83,12 @@ export default function RecordPage() {
     return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''} ${totalSeconds} second${totalSeconds !== 1 ? 's' : ''}`;
   })();
 
-  const togglePlay = (songId: string) => {
-    setPlayingId(playingId === songId ? null : songId);
+  const handlePlaySong = (song: SongInRecordDTO) => {
+    playSong(song);
+  };
+
+  const isCurrentSongPlaying = (songId: string) => {
+    return currentSong?.songId === songId && isPlaying;
   };
 
   const toggleLikeSong = (e: React.MouseEvent, songId: string) => {
@@ -168,10 +173,18 @@ export default function RecordPage() {
       <div className="px-6 py-6 bg-gradient-to-b from-black/40 to-black">
         <div className="flex items-center gap-6">
           <button
-            onClick={() => togglePlay(songs[0].songId)}
+            onClick={() => {
+              if (songs.length > 0) {
+                if (currentSong?.songId === songs[0].songId) {
+                  toggleGlobalPlay();
+                } else {
+                  handlePlaySong(songs[0]);
+                }
+              }
+            }}
             className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-400 hover:scale-105 transition flex items-center justify-center"
           >
-            {playingId ? (
+            {songs.length > 0 && isCurrentSongPlaying(songs[0]?.songId) ? (
               <Pause className="w-6 h-6 text-black fill-black" />
             ) : (
               <Play className="w-6 h-6 text-black fill-black ml-1" />
@@ -215,10 +228,10 @@ export default function RecordPage() {
           <div
             key={song.songId}
             className="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-3 rounded hover:bg-white/10 group cursor-pointer transition"
-            onClick={() => togglePlay(song.songId)}
+            onClick={() => handlePlaySong(song)}
           >
             <div className="flex items-center justify-center text-gray-400 group-hover:text-white">
-              {playingId === song.songId ? (
+              {isCurrentSongPlaying(song.songId) ? (
                 <div className="flex gap-0.5 items-end h-4">
                   <span className="w-0.5 bg-red-500 animate-pulse h-2"></span>
                   <span
@@ -245,21 +258,14 @@ export default function RecordPage() {
               />
               <div>
                 <div
-                  className={`font-medium ${playingId === song.songId ? "text-red-500" : "text-white"
+                  className={`font-medium ${isCurrentSongPlaying(song.songId) ? "text-red-500" : "text-white"
                     }`}
                 >
                   {song.title}
                 </div>
                 <div className="text-sm text-gray-400">
                   {(() => {
-                    const recordArtistIds = new Set(record.artists?.map((a) => a.id) || []);
-                    const sortedArtists = [...(song.artists || [])].sort((a, b) => {
-                      const aIsPrimary = recordArtistIds.has(a.id);
-                      const bIsPrimary = recordArtistIds.has(b.id);
-                      if (aIsPrimary && !bIsPrimary) return -1;
-                      if (!aIsPrimary && bIsPrimary) return 1;
-                      return 0;
-                    });
+                    const sortedArtists = song.artists || [];
 
                     if (sortedArtists.length === 0) return "Unknown Artist";
 
@@ -318,7 +324,10 @@ export default function RecordPage() {
                 isUpdate={true}
                 existingRecord={record}
                 existingSongs={songs}
-                onUpdateSuccess={() => setShowUpdateModal(false)}
+                onUpdateSuccess={() => {
+                  fetchData();
+                  setShowUpdateModal(false);
+                }}
               />
             </div>
           </div>

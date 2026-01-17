@@ -7,6 +7,9 @@ import { RecordProvider } from "@/context/RecordContext";
 import { SongProvider } from "@/context/SongContext";
 import { UserProvider } from "@/context/UserContext";
 
+import { PlayerProvider } from "@/context/PlayerContext";
+import { MusicPlayer } from "@/components/player/MusicPlayer";
+
 const outfit = Outfit({
   subsets: ["latin"],
 });
@@ -25,8 +28,11 @@ export default function RootLayout({ children }) {
             <GenreProvider>
               <RecordProvider>
                 <SongProvider>
-                  {children}
-                  <Toaster richColors position="top-right" />
+                  <PlayerProvider>
+                    {children}
+                    <MusicPlayer />
+                    <Toaster richColors position="top-right" />
+                  </PlayerProvider>
                 </SongProvider>
               </RecordProvider>
             </GenreProvider>

@@ -274,7 +274,7 @@ const Signup = () => {
                   <br />
                   {passwordConditions.map((condition, index) => (
                     <Checkbox
-                      key={index}
+                      key={`password-condition-${index}`}
                       {...({
                         disabled: true,
                         checked: invalidPasswordConditions[index],

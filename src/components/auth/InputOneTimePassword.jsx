@@ -39,7 +39,7 @@ export function InputOneTimePassword() {
     <div className="w-full max-w-sm">
       <div className="my-4 flex items-center justify-center gap-5">
         {otp.map((digit, index) => (
-          <React.Fragment key={index}>
+          <React.Fragment key={`otp-${index}`}>
             <Input
               type="text"
               maxLength={1}

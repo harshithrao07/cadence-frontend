@@ -9,18 +9,34 @@ import { useArtists } from "@/context/ArtistContext";
 
 interface AddArtistProps {
   setShowAddForm: (show: boolean) => void;
+  initialArtist?: {
+    id: string;
+    name: string;
+    description?: string;
+    profileUrl?: string;
+  };
+  mode?: "create" | "edit";
+  onArtistSaved?: (artist: {
+    id: string;
+    name: string;
+    description?: string;
+    profileUrl?: string | null;
+  }) => void;
 }
 
 const AddArtist: React.FC<AddArtistProps> = ({
-  setShowAddForm
+  setShowAddForm,
+  initialArtist,
+  mode = "create",
+  onArtistSaved
 }) => {
   const [newArtist, setNewArtist] = useState<NewArtistDTO>({
-    name: "",
-    description: "",
+    name: initialArtist?.name || "",
+    description: initialArtist?.description || "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePic, setProfilePic] = useState(initialArtist?.profileUrl || null);
   const [fileInputRef, setFileInputRef] = useState<File>(null);
 
   const { refreshArtists } = useArtists();
@@ -36,16 +52,65 @@ const AddArtist: React.FC<AddArtistProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (validateForm()) {
-      try {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      if (mode === "edit" && initialArtist?.id) {
+        const res = await api.put(
+          `/api/v1/artist/update/${initialArtist.id}`,
+          newArtist
+        );
+
+        if (res.status >= 200 && res.status < 300) {
+          let profileUrl = initialArtist.profileUrl || null;
+          const artistId = initialArtist.id;
+
+          if (fileInputRef) {
+            const formData = new FormData();
+            const extension = fileInputRef.name.split(".").pop();
+
+            formData.append(
+              "file",
+              fileInputRef,
+              "artist profile_url " + artistId + " " + extension
+            );
+
+            const fileRes = await api.post(`/api/v1/files`, formData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+
+            if (Array.isArray(fileRes.data) && fileRes.data.length > 0) {
+              profileUrl = fileRes.data[0].url;
+            }
+          }
+
+          const updatedArtist = {
+            id: artistId,
+            name: newArtist.name,
+            description: newArtist.description,
+            profileUrl,
+          };
+
+          refreshArtists();
+          if (onArtistSaved) {
+            onArtistSaved(updatedArtist);
+          }
+          setNewArtist({ name: "", description: "" });
+          setProfilePic(null);
+          setShowAddForm(false);
+          setErrors({});
+        }
+      } else {
         const res = await api.post("/api/v1/artist/add", newArtist);
         let profileUrl = null;
         let artistId = null;
 
         if (res.status == 201) {
-          if (res.status === 201 && fileInputRef) {
-            artistId = res.data.data;
+          artistId = res.data.data;
 
+          if (fileInputRef) {
             const formData = new FormData();
             const extension = fileInputRef.name.split(".").pop();
 
@@ -71,14 +136,17 @@ const AddArtist: React.FC<AddArtistProps> = ({
           };
 
           refreshArtists();
+          if (onArtistSaved) {
+            onArtistSaved(artistWithProfile);
+          }
           setNewArtist({ name: "", description: "" });
           setProfilePic(null);
           setShowAddForm(false);
           setErrors({});
         }
-      } catch (error) {
-        console.error("Error adding artist:", error);
       }
+    } catch (error) {
+      console.error("Error adding artist:", error);
     }
   };
 
@@ -92,7 +160,9 @@ const AddArtist: React.FC<AddArtistProps> = ({
   return (
     <div className="mb-10 bg-gradient-to-br from-zinc-900/90 to-zinc-900/50 backdrop-blur-xl rounded-2xl p-8 border border-zinc-800/50 shadow-2xl">
       <div className="flex items-center justify-between mb-8">
-        <h3 className="text-3xl font-bold">Add New Artist</h3>
+        <h3 className="text-3xl font-bold">
+          {mode === "edit" ? "Edit Artist" : "Add New Artist"}
+        </h3>
         <button
           onClick={handleCancel}
           className="text-zinc-400 hover:text-white transition-colors p-2 hover:bg-zinc-800 rounded-full"
@@ -152,7 +222,7 @@ const AddArtist: React.FC<AddArtistProps> = ({
               onClick={handleSubmit}
               className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-10 py-4 rounded-full font-bold transition-all transform hover:scale-105 shadow-lg shadow-red-500/30"
             >
-              Add Artist
+              {mode === "edit" ? "Save Changes" : "Add Artist"}
             </button>
             <button
               onClick={handleCancel}

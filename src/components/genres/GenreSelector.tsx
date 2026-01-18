@@ -61,13 +61,22 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
   };
 
   const handleAddGenre = async () => {
-    const alreadyExists = results.some(
-      (g) => g.type.toLowerCase() === query.toLowerCase()
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    const formattedType = trimmed.toUpperCase();
+
+    const alreadyExistsInResults = results.some(
+      (g) => g.type.trim().toUpperCase() === formattedType
     );
 
-    if (!query.trim() || alreadyExists) return;
+    const alreadyExistsInAll = allGenres.some(
+      (g) => g.type.trim().toUpperCase() === formattedType
+    );
 
-    const dto = { type: query };
+    if (alreadyExistsInResults || alreadyExistsInAll) return;
+
+    const dto = { type: formattedType };
     const genre = await addGenre(dto);
     if (!genre) return;
 
@@ -113,7 +122,7 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query && setShowDropdown(true)}
             placeholder="Search or add genres..."
-            className="w-full bg-zinc-900 text-white px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
+            className="w-full bg-zinc-900 text-black px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
           />
         </div>
 
@@ -131,7 +140,9 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-100 transition-colors text-left"
               >
                 <Plus size={18} className="text-red-500" />
-                <span className="text-black">Create &quot;{query}&quot;</span>
+                <span className="text-black">
+                  Create &quot;{query.trim().toUpperCase()}&quot;
+                </span>
               </button>
             )}
 

@@ -130,7 +130,7 @@ export default function RecordsPage() {
         {recordsWithSongs.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-lg mb-2">No records found</div>
-            <div className="text-gray-500 text-sm">This artist hasn't released any records yet.</div>
+            <div className="text-gray-500 text-sm">This artist has not released any records yet.</div>
           </div>
         ) : (
           <div className="space-y-8">

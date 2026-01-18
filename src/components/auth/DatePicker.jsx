@@ -144,7 +144,7 @@ export default function BirthdayPicker({ setDateOfBirth }) {
 
       days.push(
         <button
-          key={day}
+          key={`day-${day}`}
           onClick={() => !disabled && handleDateSelect(day)}
           disabled={disabled}
           className={`h-9 w-9 rounded-md text-sm font-normal transition-colors
@@ -189,7 +189,7 @@ export default function BirthdayPicker({ setDateOfBirth }) {
             className="bg-gray-700 text-white rounded px-2 py-1 text-sm border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {monthNames.map((month, idx) => (
-              <option key={idx} value={idx}>
+              <option key={`month-${idx}`} value={idx}>
                 {month}
               </option>
             ))}
@@ -222,7 +222,7 @@ export default function BirthdayPicker({ setDateOfBirth }) {
         <div className="grid grid-cols-7 gap-1 mb-2">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
             <div
-              key={day}
+              key={`weekday-${day}`}
               className="h-9 w-9 flex items-center justify-center text-sm font-medium text-gray-400"
             >
               {day}

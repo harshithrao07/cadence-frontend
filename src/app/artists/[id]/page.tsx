@@ -20,11 +20,13 @@ import { useUser } from "@/context/UserContext";
 import { useRouter } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
 import { SongInRecordDTO, TrackPreviewDTO } from "@/types/Song";
+import { toast } from "sonner";
+import AddArtist from "../../../components/artists/AddArtist";
 
 export default function ArtistProfile() {
-  const { getArtistById } = useArtists();
+  const { getArtistById, refreshArtists } = useArtists();
   const { isAdmin } = useUser();
-  const { playSong, currentSong, isPlaying: isGlobalPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
+  const { playSong, playQueue, currentSong, isPlaying: isGlobalPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
   const [likedSongs, setLikedSongs] = useState(new Set());
   const { id } = useParams();
   const [artist, setArtist] = useState<ArtistProfileDTO>({
@@ -40,6 +42,9 @@ export default function ArtistProfile() {
   const [popularSongs, setPopularSongs] = useState<TrackPreviewDTO[]>([]);
   const [artistRecords, setArtistRecords] = useState<RecordPreviewDTO[]>([]);
   const router = useRouter();
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -96,20 +101,93 @@ export default function ArtistProfile() {
   };
 
   const handlePlayPopularSong = (track: TrackPreviewDTO) => {
-    // Map TrackPreviewDTO to SongInRecordDTO for the player
-    const songToPlay: SongInRecordDTO = {
-      songId: track.songId,
-      title: track.title,
-      totalDuration: track.totalDuration,
-      coverUrl: track.coverUrl,
-      artists: track.artists,
-      createdBy: [], // Optional
-      songUrl: "", // Will be constructed in playSong
+    if (currentSong?.songId === track.songId) {
+      toggleGlobalPlay();
+      return;
+    }
+
+    if (!popularSongs.length) return;
+
+    let orderedTracks = [...popularSongs];
+    if (shuffle) {
+      orderedTracks = [...popularSongs];
+      for (let i = orderedTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [orderedTracks[i], orderedTracks[j]] = [orderedTracks[j], orderedTracks[i]];
+      }
+    }
+
+    const queueSongs: SongInRecordDTO[] = orderedTracks.map((t) => ({
+      songId: t.songId,
+      title: t.title,
+      totalDuration: t.totalDuration,
+      coverUrl: t.coverUrl,
+      artists: t.artists,
+      createdBy: [],
+      songUrl: "",
       order: 0,
       genres: []
-    };
-    playSong(songToPlay);
+    }));
+
+    const startIndex = queueSongs.findIndex(s => s.songId === track.songId);
+    if (startIndex === -1) {
+      const songToPlay: SongInRecordDTO = {
+        songId: track.songId,
+        title: track.title,
+        totalDuration: track.totalDuration,
+        coverUrl: track.coverUrl,
+        artists: track.artists,
+        createdBy: [],
+        songUrl: "",
+        order: 0,
+        genres: []
+      };
+      playSong(songToPlay);
+      return;
+    }
+
+    playQueue(queueSongs, startIndex);
   };
+
+  const handleDeleteArtist = async () => {
+    const artistIdParam = Array.isArray(id) ? id[0] : id;
+    if (!artistIdParam) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this artist? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/api/v1/artist/delete/${artistIdParam}`);
+      await refreshArtists();
+      toast.success("Artist deleted successfully");
+      router.push("/artists");
+    } catch (error) {
+      console.error("Failed to delete artist:", error);
+      toast.error("Failed to delete artist. Please try again.");
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="min-h-screen bg-black text-white px-8 pt-16">
+        <AddArtist
+          setShowAddForm={setIsEditing}
+          initialArtist={artist}
+          mode="edit"
+          onArtistSaved={(updated) => {
+            setArtist((prev) => ({
+              ...prev,
+              name: updated.name,
+              description: updated.description || "",
+              profileUrl: updated.profileUrl || prev.profileUrl,
+            }));
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -146,7 +224,7 @@ export default function ArtistProfile() {
       </div>
 
       {/* Controls */}
-      <div className="bg-gradient-to-b from-black/60 to-black p-8">
+      <div className="bg-black p-8">
         <div className="flex items-center justify-between mb-8">
           {/* Left controls */}
           <div className="flex items-center gap-6">
@@ -169,13 +247,44 @@ export default function ArtistProfile() {
               )}
             </button>
 
-            <button className="w-10 h-10 border border-gray-600 rounded-full flex items-center justify-center hover:border-white transition">
+            <button
+              onClick={() => setShuffle((prev) => !prev)}
+              className={`w-10 h-10 border rounded-full flex items-center justify-center transition ${shuffle ? "border-red-500 text-red-500" : "border-gray-600 text-gray-400 hover:border-white hover:text-white"}`}
+              title="Shuffle"
+            >
               <Shuffle className="w-5 h-5" />
             </button>
 
-            <button className="w-10 h-10 flex items-center justify-center hover:scale-110 transition">
-              <MoreHorizontal className="w-6 h-6" />
-            </button>
+            <div className="relative">
+              <button
+                className="w-10 h-10 flex items-center justify-center hover:scale-110 transition"
+                onClick={() => setShowMoreMenu((prev) => !prev)}
+              >
+                <MoreHorizontal className="w-6 h-6" />
+              </button>
+              {isAdmin && showMoreMenu && (
+                <div className="absolute right-0 mt-2 w-40 bg-black border border-zinc-700 rounded-md shadow-lg z-20">
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      setIsEditing(true);
+                    }}
+                  >
+                    Edit artist
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-zinc-800"
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      handleDeleteArtist();
+                    }}
+                  >
+                    Delete artist
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right action */}
@@ -276,7 +385,7 @@ export default function ArtistProfile() {
             {popularSongs.length === 0 && (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-lg mb-2">No popular songs</div>
-                <div className="text-gray-500 text-sm">This artist doesn't have any popular songs yet.</div>
+                <div className="text-gray-500 text-sm">This artist does not have any popular songs yet.</div>
               </div>
             )}
           </div>

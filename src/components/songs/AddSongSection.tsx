@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Trash2, Music, Edit2, Play, Pause } from "lucide-react";
+import { Trash2, Music, Edit2, Play, Pause, ArrowUp, ArrowDown } from "lucide-react";
 import { GenreSelector } from "../genres/GenreSelector";
 import { SongFilePicker } from "./SongFIlePicker";
 import { RECORD_LIMITS } from "@/types/Record";
 import { toast } from "sonner";
 import { ArtistSelector } from "../artists/ArtistSelector";
-import { EachNewSongDTO } from "@/types/Song";
+import { EachNewSongDTO, SongInRecordDTO } from "@/types/Song";
 import { RecordType } from "@/types/Record";
 import { ArtistPreviewDTO } from "@/types/Artists";
 import { useGenres } from "@/context/GenreContext";
+import { usePlayer } from "@/context/PlayerContext";
+import api from "@/lib/api";
 
 const AddSongSection = ({
   selectedArtists = [],
@@ -50,9 +52,7 @@ const AddSongSection = ({
   const hasReachedLimit = songs.length >= maxSongsAllowed;
   const hasGenre = song.genreIds.length > 0;
 
-  // State for playing songs
-  const [playingSongIndex, setPlayingSongIndex] = useState<number | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const { playQueue, currentSong, isPlaying, togglePlay } = usePlayer();
 
   // Track previous recordArtistIds to identify featured artists during sync
   const prevRecordArtistIdsRef = useRef<string[]>(recordArtistIds);
@@ -73,16 +73,20 @@ const AddSongSection = ({
   useEffect(() => {
     const prevIds = prevRecordArtistIdsRef.current;
 
+    const removedRecordIds = prevIds.filter(id => !recordArtistIds.includes(id));
+    const newRecordIds = recordArtistIds.filter(id => !prevIds.includes(id));
+
     setSongs(prevSongs => {
       if (prevSongs.length === 0) return prevSongs;
 
       return prevSongs.map(s => {
-        // Find featured artists: they were in the song but NOT in the previous record artists
-        const featuredIds = s.artistIds.filter(id => !prevIds.includes(id));
+        let newArtistIds = s.artistIds.filter(id => !removedRecordIds.includes(id));
 
-        // New artist set = new record artists + existing featured artists
-        // Use a Set to avoid duplicates if any overlap 
-        const newArtistIds = Array.from(new Set([...recordArtistIds, ...featuredIds]));
+        newRecordIds.forEach(id => {
+          if (!newArtistIds.includes(id)) {
+            newArtistIds.push(id);
+          }
+        });
 
         return {
           ...s,
@@ -101,16 +105,6 @@ const AddSongSection = ({
   useEffect(() => {
     onSongFilesChange?.(songFiles);
   }, [songFiles]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
-      }
-    };
-  }, [audioElement]);
 
   useEffect(() => {
     if (editingSongIndex === null) {
@@ -184,8 +178,8 @@ const AddSongSection = ({
       genreIds: [],
       artistIds: [...recordArtistIds],
       totalDuration: 0,
-      order: recordType === RecordType.SINGLE ? 1 :
-        Math.max(...songs.map(s => s.order), 0) + 1,
+      order: recordType === RecordType.SINGLE ? 0 :
+        Math.max(...songs.map(s => s.order), -1) + 1,
       coverUrl: ""
     });
     setCurrentFile(undefined);
@@ -256,12 +250,9 @@ const AddSongSection = ({
       return;
     }
 
-    // --- File Handling ---
     if (currentFile) {
-      // New file provided (Add or Update)
       setSongFiles(prev => {
         const newMap = new Map(prev);
-        // If updating, delete old mapping if title changed or just to be clean
         if (isEditing) {
           const oldTitle = songs[editingSongIndex].title.trim();
           newMap.delete(oldTitle);
@@ -270,8 +261,6 @@ const AddSongSection = ({
         return newMap;
       });
     } else if (isEditing) {
-      // No new file provided -> We are keeping the existing file.
-      // If title changed, we need to move the file mapping.
       const oldTitle = songs[editingSongIndex].title.trim();
       if (oldTitle !== trimmedTitle) {
         setSongFiles(prev => {
@@ -286,64 +275,23 @@ const AddSongSection = ({
       }
     }
 
-    // --- Song List Update ---
-    const finalOrder = recordType === RecordType.SINGLE ? 1 : song.order;
-
     setSongs((prev) => {
-      let newSongs = [...prev];
+      const isEditingCurrent = editingSongIndex !== null;
+      const updatedSong = { ...song };
+      let newSongs: EachNewSongDTO[] = [];
 
-      // Remove old entry if editing
-      if (isEditing) {
-        newSongs = newSongs.filter((_, i) => i !== editingSongIndex);
-        // Normalize orders to prevent gaps when moving items (e.g. moving 3 to 5)
-        newSongs = newSongs.map((s, idx) => ({ ...s, order: idx + 1 }));
+      if (isEditingCurrent && editingSongIndex !== null) {
+        newSongs = prev.map((s, idx) =>
+          idx === editingSongIndex ? updatedSong : s
+        );
+      } else {
+        newSongs = [...prev, updatedSong];
       }
 
-      // Handle Order Conflicts
-      const orderConflictIndex = newSongs.findIndex(s => s.order === finalOrder);
-      if (orderConflictIndex >= 0) {
-        // If manual order conflict, shift others or swap? 
-        // Original logic was: shift subsequent songs up (for add)
-        // or swap (for update).
-        // Let's stick to simple "insert and re-sort" if adding, or "swap" if updating?
-        // Actually, the easiest UX is usually: Insert at End if default, or Insert at Index.
-
-        if (isEditing) {
-          // Swap with the conflict
-          const conflictSong = newSongs[orderConflictIndex];
-          // If we swapped, we need to give the conflicting song the OLD order of the song we are editing...
-          // This gets complicated. 
-
-          // Simpler approach: Just re-calculate orders if needed, or allow duplicates temporarily and sort?
-          // Let's follow original logic: 
-          // If Add: shift subsequent.
-          // If Update: swap.
-
-          // BUT we already removed the old entry from `newSongs`.
-          // So now we effectively are "Adding" the updated song back.
-
-          // Let's just use the "Shift Insert" logic for simplicity, or 
-          // re-implement the Swap logic if it was preferred.
-          // The previous code had specific swap logic for Edit. 
-
-          // Let's try to KEEP it simple:
-          // Just map everything that is >= finalOrder to order + 1
-          newSongs = newSongs.map(s =>
-            s.order >= finalOrder ? { ...s, order: s.order + 1 } : s
-          );
-        } else {
-          // Adding new
-          newSongs = newSongs.map(s =>
-            s.order >= finalOrder ? { ...s, order: s.order + 1 } : s
-          );
-        }
-      }
-
-      // Add valid song
-      newSongs.push({ ...song, order: finalOrder });
-
-      // Sort and normalize orders just in case (optional, but good for safety)
-      return newSongs.sort((a, b) => a.order - b.order);
+      return newSongs.map((s, idx) => ({
+        ...s,
+        order: idx,
+      }));
     });
 
     toast.success(isEditing ? "Song updated successfully" : "Song added");
@@ -385,29 +333,69 @@ const AddSongSection = ({
     setFilePickerKey(prev => prev + 1);
   };
 
-  const removeSong = (index: number) => {
+  const removeSong = async (index: number) => {
     if (editingSongIndex === index) {
       resetForm();
     }
 
-    setSongs((prev) => {
-      const songToRemove = prev[index];
+    const songToRemove = songs[index] as EachNewSongDTO & { id?: string };
 
-      if (songToRemove) {
+    if (isUpdate && songToRemove?.id) {
+      try {
+        await api.delete(`/api/v1/song/delete/${songToRemove.id}`);
+        toast.success("Song deleted successfully");
+      } catch (error) {
+        console.error("Failed to delete song:", error);
+        toast.error("Failed to delete song. Please try again.");
+        return;
+      }
+    }
+
+    setSongs((prev) => {
+      const target = prev[index] as EachNewSongDTO;
+
+      if (target) {
         setSongFiles((fileMap) => {
           const newMap = new Map(fileMap);
-          newMap.delete(songToRemove.title.trim());
+          newMap.delete(target.title.trim());
           return newMap;
         });
       }
 
-      // Remove and reassign order
       return prev
         .filter((_, i) => i !== index)
         .map((song, idx) => ({
           ...song,
-          order: idx + 1,
+          order: idx,
         }));
+    });
+  };
+
+  const moveSongUp = (index: number) => {
+    if (index <= 0) return;
+    setSongs((prev) => {
+      const newSongs = [...prev];
+      const temp = newSongs[index - 1];
+      newSongs[index - 1] = newSongs[index];
+      newSongs[index] = temp;
+      return newSongs.map((song, idx) => ({
+        ...song,
+        order: idx,
+      }));
+    });
+  };
+
+  const moveSongDown = (index: number) => {
+    if (index >= songs.length - 1) return;
+    setSongs((prev) => {
+      const newSongs = [...prev];
+      const temp = newSongs[index + 1];
+      newSongs[index + 1] = newSongs[index];
+      newSongs[index] = temp;
+      return newSongs.map((song, idx) => ({
+        ...song,
+        order: idx,
+      }));
     });
   };
 
@@ -423,37 +411,42 @@ const AddSongSection = ({
     song.totalDuration <= 600 &&
     (editingSongIndex !== null || (!hasReachedLimit && currentFile)); // If adding, need file + limit check. If editing, file is optional (keep existing)
 
-  const togglePlaySong = (songIndex: number) => {
-    const song = songs[songIndex];
-    const audioFile = songFiles.get(song.title.trim());
+  const playFromAddSection = (songIndex: number) => {
+    const playableSongs: SongInRecordDTO[] = [];
+    let targetIndexInQueue = 0;
 
-    if (!audioFile) {
-      console.warn("No audio file found for song:", song.title.trim());
-      return;
-    }
+    songs.forEach((s, idx) => {
+      const file = songFiles.get(s.title.trim());
+      if (!file) return;
 
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
-    }
+      const artistsForSong = s.artistIds
+        .map(id => allEncounteredArtists.get(id))
+        .filter(a => Boolean(a)) as ArtistPreviewDTO[];
 
-    if (playingSongIndex === songIndex) {
-      setPlayingSongIndex(null);
-    } else {
-      const audio = new Audio(URL.createObjectURL(audioFile));
-      audio.addEventListener('ended', () => {
-        setPlayingSongIndex(null);
-        setAudioElement(null);
-      });
+      const dto: SongInRecordDTO = {
+        songId: `local-${idx}`,
+        title: s.title,
+        totalDuration: s.totalDuration,
+        coverUrl: s.coverUrl,
+        createdBy: [],
+        songUrl: "",
+        order: s.order,
+        artists: artistsForSong,
+        genres: [],
+      };
 
-      audio.play().catch(err => {
-        console.error("Error playing audio:", err);
-        setPlayingSongIndex(null);
-      });
+      (dto as any).file = file;
 
-      setAudioElement(audio);
-      setPlayingSongIndex(songIndex);
-    }
+      if (idx === songIndex) {
+        targetIndexInQueue = playableSongs.length;
+      }
+
+      playableSongs.push(dto);
+    });
+
+    if (playableSongs.length === 0) return;
+
+    playQueue(playableSongs, targetIndexInQueue);
   };
 
   const getArtistNames = (artistIds: string[]) => {
@@ -514,29 +507,7 @@ const AddSongSection = ({
             )}
           </div>
 
-          {(recordType === RecordType.ALBUM || recordType === RecordType.EP) && (
-            <div className="mb-6">
-              <label className="block text-sm font-semibold mb-3 text-gray-100">
-                Track Order
-              </label>
-              <input
-                type="number"
-                min="1"
-                max={maxSongsAllowed}
-                value={song.order}
-                onChange={(e) => {
-                  const order = parseInt(e.target.value) || 1;
-                  setSong({ ...song, order: Math.max(1, Math.min(maxSongsAllowed, order)) });
-                }}
-                className="w-full bg-gray-800 text-gray-100 px-4 py-3 rounded-lg border border-gray-700 focus:border-green-500 focus:outline-none"
-                placeholder="Enter track number..."
-              />
-              <p className="mt-2 text-sm text-gray-300">
-                Track number (1-{maxSongsAllowed})
-              </p>
-            </div>
-          )}
-
+          
           <ArtistSelector
             key={`artist-${artistSelectorKey}`}
             selectedArtistIds={song.artistIds}
@@ -571,14 +542,21 @@ const AddSongSection = ({
             // We can improve this if needed, but for now passing currentFile (which is set from map on edit) should work.
             onFileSelect={(file, duration) => {
               setCurrentFile(file);
-              setSong((prev) => ({
-                ...prev,
-                totalDuration: duration,
-                title:
-                  recordType === RecordType.SINGLE
-                    ? prev.title || recordTitle.trim()
-                    : prev.title || file.name.replace(/\.[^/.]+$/, ""),
-              }));
+              setSong((prev) => {
+                const filenameTitle = file.name.replace(/\.[^/.]+$/, "");
+                const hasCustomTitle = prev.title.trim().length > 0;
+
+                return {
+                  ...prev,
+                  totalDuration: duration,
+                  title:
+                    recordType === RecordType.SINGLE
+                      ? prev.title || recordTitle.trim()
+                      : hasCustomTitle
+                        ? prev.title
+                        : filenameTitle,
+                };
+              });
             }}
           />
 
@@ -650,22 +628,35 @@ const AddSongSection = ({
             </div>
 
             <div className="space-y-2">
-              {songs.map((s, idx) => (
-                <div
-                  key={s.order}
-                  className={`flex items-center gap-4 p-4 rounded-lg transition-colors group ${editingSongIndex === idx
-                    ? "bg-red-500/10 border border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-                    : "bg-zinc-900 hover:bg-zinc-800"
-                    }`}
-                >
+              {songs.map((s, idx) => {
+                const isCurrentRowPlaying =
+                  !!currentSong &&
+                  !!(currentSong as any).file &&
+                  currentSong.title === s.title &&
+                  isPlaying;
+
+                return (
+                  <div
+                    key={`song-${idx}`}
+                    className={`flex items-center gap-4 p-4 rounded-lg transition-colors group ${editingSongIndex === idx
+                      ? "bg-red-500/10 border border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+                      : "bg-zinc-900 hover:bg-zinc-800"
+                      }`}
+                  >
                   <div className="flex-shrink-0 w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center">
                     {songFiles.has(s.title.trim()) ? (
                       <button
-                        onClick={() => togglePlaySong(idx)}
+                        onClick={() => {
+                          if (isCurrentRowPlaying) {
+                            togglePlay();
+                          } else {
+                            playFromAddSection(idx);
+                          }
+                        }}
                         className="w-full h-full flex items-center justify-center hover:bg-zinc-700 rounded-lg transition-colors"
-                        title={playingSongIndex === idx ? "Pause" : "Play"}
+                        title={isCurrentRowPlaying ? "Pause" : "Play"}
                       >
-                        {playingSongIndex === idx ? (
+                        {isCurrentRowPlaying ? (
                           <Pause className="w-6 h-6 text-red-500" />
                         ) : (
                           <Play className="w-6 h-6 text-red-500 ml-0.5" />
@@ -678,7 +669,7 @@ const AddSongSection = ({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`font-semibold truncate ${playingSongIndex === idx ? "text-red-500" : "text-white"}`}>
+                    <div className={`font-semibold truncate ${isCurrentRowPlaying ? "text-red-500" : "text-white"}`}>
                       {s.title}
                     </div>
                     <div className="text-sm text-gray-300">
@@ -689,6 +680,28 @@ const AddSongSection = ({
                     </div>
                   </div>
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => moveSongUp(idx)}
+                      disabled={idx === 0}
+                      className={`p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${idx === 0
+                        ? "cursor-not-allowed text-zinc-600"
+                        : "hover:bg-zinc-700 text-zinc-400 hover:text-white"
+                        }`}
+                      title="Move up"
+                    >
+                      <ArrowUp className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => moveSongDown(idx)}
+                      disabled={idx === songs.length - 1}
+                      className={`p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${idx === songs.length - 1
+                        ? "cursor-not-allowed text-zinc-600"
+                        : "hover:bg-zinc-700 text-zinc-400 hover:text-white"
+                        }`}
+                      title="Move down"
+                    >
+                      <ArrowDown className="w-5 h-5" />
+                    </button>
                     <button
                       onClick={() => startEditingSong(idx)}
                       disabled={editingSongIndex === idx}
@@ -702,16 +715,19 @@ const AddSongSection = ({
                     </button>
                     <button
                       onClick={() => {
-                        toast("Are you sure you want to delete this song?", {
-                          action: {
-                            label: "Delete",
-                            onClick: () => removeSong(idx),
-                          },
-                          cancel: {
-                            label: "Cancel",
-                            onClick: () => { },
-                          },
-                        });
+                        toast(
+                          `Are you sure you want to delete "${s.title}"?`,
+                          {
+                            action: {
+                              label: "Delete",
+                              onClick: () => removeSong(idx),
+                            },
+                            cancel: {
+                              label: "Cancel",
+                              onClick: () => {},
+                            },
+                          }
+                        );
                       }}
                       className="opacity-0 group-hover:opacity-100 p-2 hover:bg-zinc-700 rounded-lg transition-all"
                       title="Remove song"
@@ -720,7 +736,7 @@ const AddSongSection = ({
                     </button>
                   </div>
                 </div>
-              ))}
+              );})}
             </div>
           </div>
         )}

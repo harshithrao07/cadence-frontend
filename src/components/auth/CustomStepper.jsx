@@ -12,7 +12,7 @@ export function CustomStepper({ activeStep, setActiveStep }) {
       >
         {[0, 1, 2].map((step) => (
           <Step
-            key={step}
+            key={`step-${step}`}
             className="h-0 w-0 bg-transparent"
             activeClassName="ring-0 !bg-white text-white"
             completedClassName="!bg-white text-white"

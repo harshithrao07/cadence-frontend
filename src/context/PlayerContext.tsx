@@ -21,9 +21,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.5);
+  const [queue, setQueue] = useState<SongInRecordDTO[]>([]);
+  const [queueIndex, setQueueIndex] = useState<number>(-1);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
+  const queueRef = useRef<SongInRecordDTO[]>([]);
+  const queueIndexRef = useRef<number>(-1);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const playRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -34,22 +40,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
       const handleDurationChange = () => setDuration(audio.duration);
-      const handleEnded = () => {
-        setIsPlaying(false);
-        setCurrentTime(0);
-      };
 
       audio.addEventListener("timeupdate", handleTimeUpdate);
       audio.addEventListener("durationchange", handleDurationChange);
-      audio.addEventListener("ended", handleEnded);
 
       return () => {
         audio.removeEventListener("timeupdate", handleTimeUpdate);
         audio.removeEventListener("durationchange", handleDurationChange);
-        audio.removeEventListener("ended", handleEnded);
         audio.pause();
         audio.src = "";
-        if (activeUrlRef.current) {
+        if (activeUrlRef.current && activeUrlRef.current.startsWith("blob:")) {
           URL.revokeObjectURL(activeUrlRef.current);
           activeUrlRef.current = null;
         }
@@ -58,50 +58,183 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    queueIndexRef.current = queueIndex;
+  }, [queueIndex]);
+
+  useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
   }, [volume]);
 
-  const playSong = React.useCallback(
+  const loadAndPlaySong = React.useCallback(
     async (song: SongInRecordDTO) => {
-      if (audioRef.current) {
-        try {
-          if (currentSong?.songId !== song.songId) {
-            const response = await api.get(
-              `api/v1/song/stream/${song.songId}`,
-              {
-                responseType: "blob",
-              }
-            );
+      if (!audioRef.current) return;
 
-            const blob = new Blob([response.data], { type: "audio/mpeg" });
-            const url = window.URL.createObjectURL(blob);
+      const requestId = ++playRequestIdRef.current;
 
-            if (activeUrlRef.current) {
-              window.URL.revokeObjectURL(activeUrlRef.current);
+      if (requestControllerRef.current) {
+        requestControllerRef.current.abort();
+        requestControllerRef.current = null;
+      }
+
+      const audio = audioRef.current;
+      audio.pause();
+      audio.currentTime = 0;
+
+      setCurrentSong(song);
+      setCurrentTime(0);
+
+      try {
+        let url: string | null = null;
+        const localFile = (song as any).file as File | undefined;
+        let controller: AbortController | null = null;
+
+        if (localFile) {
+          const blob = new Blob([localFile], { type: localFile.type || "audio/mpeg" });
+          url = window.URL.createObjectURL(blob);
+        } else if (song.songUrl) {
+          url = song.songUrl;
+        } else {
+          controller = new AbortController();
+          requestControllerRef.current = controller;
+          const response = await api.get(
+            `api/v1/song/stream/${song.songId}`,
+            {
+              responseType: "blob",
+              signal: controller.signal,
             }
-            activeUrlRef.current = url;
+          );
 
-            audioRef.current.src = url;
-            setCurrentSong(song);
-          }
-
-          audioRef.current.play();
-          setIsPlaying(true);
-        } catch (error) {
-          console.error("Error playing song:", error);
+          const blob = new Blob([response.data], { type: "audio/mpeg" });
+          url = window.URL.createObjectURL(blob);
         }
+
+        if (controller && requestControllerRef.current === controller) {
+          requestControllerRef.current = null;
+        }
+
+        if (requestId !== playRequestIdRef.current) {
+          if (url && typeof url === "string" && url.startsWith("blob:")) {
+            window.URL.revokeObjectURL(url);
+          }
+          return;
+        }
+
+        if (url) {
+          if (activeUrlRef.current && activeUrlRef.current.startsWith("blob:")) {
+            window.URL.revokeObjectURL(activeUrlRef.current);
+          }
+          activeUrlRef.current = url;
+          audio.src = url;
+        }
+
+        await audio.play();
+
+        if (requestId !== playRequestIdRef.current) {
+          audio.pause();
+          return;
+        }
+
+        setIsPlaying(true);
+      } catch (error: any) {
+        if (error && (error.code === "ERR_CANCELED" || error.name === "CanceledError")) {
+          return;
+        }
+        console.error("Error playing song:", error);
+        setIsPlaying(false);
       }
     },
-    [currentSong]
+    []
   );
 
-  const pauseSong = React.useCallback(() => {
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleEnded = () => {
+      const q = queueRef.current;
+      const idx = queueIndexRef.current;
+
+      if (q.length > 0 && idx >= 0 && idx < q.length - 1) {
+        const nextIndex = idx + 1;
+        setQueueIndex(nextIndex);
+        loadAndPlaySong(q[nextIndex]);
+      } else {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }
+    };
+
+    audio.addEventListener("ended", handleEnded);
+    return () => {
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [loadAndPlaySong]);
+
+  const playSong = React.useCallback(
+    (song: SongInRecordDTO) => {
+      setQueue([song]);
+      setQueueIndex(0);
+      queueRef.current = [song];
+      queueIndexRef.current = 0;
+      loadAndPlaySong(song);
+    },
+    [loadAndPlaySong]
+  );
+
+  const playQueue = React.useCallback(
+    (songs: SongInRecordDTO[], startIndex: number = 0) => {
+      if (!songs.length || startIndex < 0 || startIndex >= songs.length) return;
+      setQueue(songs);
+      setQueueIndex(startIndex);
+      queueRef.current = songs;
+      queueIndexRef.current = startIndex;
+      loadAndPlaySong(songs[startIndex]);
+    },
+    [loadAndPlaySong]
+  );
+
+  const playNext = React.useCallback(() => {
+    const q = queueRef.current;
+    const idx = queueIndexRef.current;
+    if (q.length === 0 || idx < 0 || idx >= q.length - 1) return;
+    const nextIndex = idx + 1;
+    setQueueIndex(nextIndex);
     if (audioRef.current) {
       audioRef.current.pause();
-      setIsPlaying(false);
+      audioRef.current.currentTime = 0;
     }
+    loadAndPlaySong(q[nextIndex]);
+  }, [loadAndPlaySong]);
+
+  const playPrevious = React.useCallback(() => {
+    const q = queueRef.current;
+    const idx = queueIndexRef.current;
+    if (q.length === 0 || idx <= 0) return;
+    const prevIndex = idx - 1;
+    setQueueIndex(prevIndex);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    loadAndPlaySong(q[prevIndex]);
+  }, [loadAndPlaySong]);
+
+  const pauseSong = React.useCallback(() => {
+    playRequestIdRef.current++;
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+      requestControllerRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlaying(false);
   }, []);
 
   const resumeSong = React.useCallback(() => {
@@ -126,6 +259,32 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const resetPlayer = React.useCallback(() => {
+    playRequestIdRef.current++;
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+      requestControllerRef.current = null;
+    }
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = "";
+    }
+    if (activeUrlRef.current && activeUrlRef.current.startsWith("blob:")) {
+      URL.revokeObjectURL(activeUrlRef.current);
+      activeUrlRef.current = null;
+    }
+    setCurrentSong(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setQueue([]);
+    setQueueIndex(-1);
+    queueRef.current = [];
+    queueIndexRef.current = -1;
+  }, []);
+
   return (
     <PlayerContext.Provider
       value={{
@@ -134,12 +293,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         currentTime,
         duration,
         volume,
+        queue,
+        queueIndex,
         playSong,
         pauseSong,
         resumeSong,
         seekTo,
         setVolume,
         togglePlay,
+        playQueue,
+        playNext,
+        playPrevious,
+        resetPlayer,
       }}
     >
       {children}

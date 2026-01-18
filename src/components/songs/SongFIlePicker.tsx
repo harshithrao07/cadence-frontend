@@ -1,9 +1,17 @@
 import { Music, Upload } from "lucide-react";
+import { toast } from "sonner";
 
 export const SongFilePicker = ({ onFileSelect, selectedFile }) => {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      toast.error("File size cannot exceed 10MB");
+      e.target.value = "";
+      return;
+    }
 
     const audio = new Audio();
     const objectUrl = URL.createObjectURL(file);

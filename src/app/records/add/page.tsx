@@ -11,6 +11,7 @@ import {
 } from "@/types/Record";
 import { useArtists } from "@/context/ArtistContext";
 import { useUser } from "@/context/UserContext";
+import { usePlayer } from "@/context/PlayerContext";
 import Image from "next/image";
 import api from "@/lib/api";
 import AddSongSection from "@/components/songs/AddSongSection";
@@ -28,10 +29,13 @@ interface AddRecordPageProps {
   onUpdateSuccess?: () => void;
 }
 
+type EditableSong = EachNewSongDTO & { id?: string };
+
 export default function AddRecordPage({ isUpdate = false, existingRecord, existingSongs = [], onUpdateSuccess }: AddRecordPageProps) {
   const router = useRouter();
   const { searchArtists } = useArtists();
   const { isAdmin } = useUser();
+  const { resetPlayer } = usePlayer();
 
   const [selectedType, setSelectedType] = useState<RecordType>(existingRecord?.recordType || null);
   const [coverPreview, setCoverPreview] = useState<string | null>(existingRecord?.coverUrl || null);
@@ -43,14 +47,15 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
     recordType: existingRecord?.recordType || null,
     artistIds: isUpdate && existingRecord?.artists ? existingRecord.artists.map(a => a.id) : [],
   });
-  const [songs, setSongs] = useState<EachNewSongDTO[]>(() => {
+  const [songs, setSongs] = useState<EditableSong[]>(() => {
     if (isUpdate && existingSongs) {
       return existingSongs.map((song, index) => ({
+        id: song.songId,
         title: song.title,
         genreIds: song.genres?.map(g => g.id) || [], // Extract genre IDs from existing genres
         artistIds: song.artists?.map(a => a.id) || [],
         totalDuration: song.totalDuration,
-        order: song.order || index + 1,
+        order: song.order ?? index,
         coverUrl: song.coverUrl,
       }));
     }
@@ -63,9 +68,46 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const [selectedArtists, setSelectedArtists] = useState<ArtistPreviewDTO[]>(
     isUpdate && existingRecord?.artists ? existingRecord.artists : []
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const uploadSongFilesInBatches = async (entries: { file: File; filename: string }[]) => {
+    if (!entries.length) return;
+
+    for (const { file, filename } of entries) {
+      const formData = new FormData();
+      formData.append("file", file, filename);
+
+      await api.post("/api/v1/files", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    }
+  };
+
+  React.useEffect(() => {
+    if (isUpdate) {
+      resetPlayer();
+    }
+    return () => {
+      resetPlayer();
+    };
+  }, [isUpdate, resetPlayer]);
 
   const handleSongsChange = (updatedSongs: EachNewSongDTO[]) => {
-    setSongs(updatedSongs);
+    setSongs((prev) => {
+      const idByTitle = new Map<string, string | undefined>();
+      prev.forEach((song) => {
+        const editable = song as EditableSong;
+        idByTitle.set(song.title.trim(), editable.id);
+      });
+
+      return updatedSongs.map((song, index) => {
+        const fromTitle = idByTitle.get(song.title.trim());
+        return {
+          ...song,
+          id: fromTitle,
+        };
+      });
+    });
   };
 
   const handleSongFilesChange = (updatedSongFiles: Map<string, File>) => {
@@ -151,14 +193,6 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   };
 
   const handleSubmit = async () => {
-    const recordDTO: NewRecordRequestDTO = {
-      ...newRecord,
-      recordType: selectedType,
-      releaseTimestamp: newRecord.releaseTimestamp
-        ? new Date(`${newRecord.releaseTimestamp}T00:00:00`).getTime()
-        : new Date().getTime(),
-    };
-
     if (songs.length > RECORD_LIMITS[selectedType]) {
       toast.error(
         `You can only add up to ${RECORD_LIMITS[selectedType]
@@ -167,14 +201,41 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
       return;
     }
 
+    const recordDTO: NewRecordRequestDTO = {
+      ...newRecord,
+      recordType: selectedType,
+      releaseTimestamp: newRecord.releaseTimestamp
+        ? new Date(`${newRecord.releaseTimestamp}T00:00:00`).getTime()
+        : new Date().getTime(),
+    };
+
     try {
+      setIsSubmitting(true);
       if (isUpdate && existingRecord) {
         let coverUrl = existingRecord.coverUrl; // Start with existing cover URL
+
+        let artistIdsForUpdate = recordDTO.artistIds;
+
+        if (selectedType === RecordType.SINGLE) {
+          const songArtistIds = new Set<string>();
+          songs.forEach(song => {
+            song.artistIds.forEach(id => songArtistIds.add(id));
+          });
+
+          const mergedIds = [...artistIdsForUpdate];
+          songArtistIds.forEach(id => {
+            if (!mergedIds.includes(id)) {
+              mergedIds.push(id);
+            }
+          });
+
+          artistIdsForUpdate = mergedIds;
+        }
 
         const updateRecord = {
           title: recordDTO.title,
           releaseTimestamp: recordDTO.releaseTimestamp,
-          artistIds: recordDTO.artistIds
+          artistIds: artistIdsForUpdate
         }
         const res = await api.put(`/api/v1/record/update/${existingRecord.id}`, updateRecord);
         if (res.status == 200) {
@@ -195,26 +256,91 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
             coverUrl = uploadRes.data[0].url;
           }
 
-          // Update existing songs
-          for (let i = 0; i < existingSongs.length; i++) {
-            const existingSong = existingSongs[i];
-            const updatedSongData = songs[i];
+          let workingSongs: EditableSong[] = songs.map((song, index) => ({
+            ...song,
+            order: index,
+          }));
 
-            if (existingSong && updatedSongData) {
-              const updatedSong: UpdateSongDTO = {
-                title: updatedSongData.title,
-                genreIds: updatedSongData.genreIds,
-                artistIds: updatedSongData.artistIds,
-                totalDuration: updatedSongData.totalDuration,
-                coverUrl: coverUrl
-              };
+          const newSongs = workingSongs.filter((song) => !song.id);
 
-              await api.put(
-                `/api/v1/song/update/${existingSong.songId}`,
-                updatedSong
+          if (newSongs.length > 0) {
+            const songsDTO: NewSongsDTO = {
+              recordId: existingRecord.id,
+              songs: workingSongs
+                .map((song, index) => ({
+                  song,
+                  index,
+                }))
+                .filter(({ song }) => !song.id)
+                .map(({ song, index }) => ({
+                  title: song.title,
+                  genreIds: song.genreIds,
+                  artistIds: song.artistIds,
+                  totalDuration: song.totalDuration,
+                  order: index,
+                  coverUrl: coverUrl,
+                })),
+            };
+
+            if (songsDTO.songs.length > 0) {
+              const songsRes = await api.post<ApiResponse<AddSongResponseDTO[]>>(
+                "/api/v1/song/add?editMode=true",
+                songsDTO
               );
+
+              if (songsRes.status == 201) {
+                const created = songsRes.data.data;
+                const idByTitle = new Map(created.map((s) => [s.title, s.id]));
+
+                workingSongs = workingSongs.map((song) => {
+                  if (song.id) return song;
+                  const newId = idByTitle.get(song.title);
+                  if (!newId) return song;
+                  return { ...song, id: newId };
+                });
+
+                const fileEntries: { file: File; filename: string }[] = [];
+
+                for (const createdSong of created) {
+                  const title = createdSong.title;
+                  const file = songFiles.get(title);
+                  if (!file) continue;
+
+                  const extension = file.name.split(".").pop();
+                  const filename = `song song_url ${createdSong.id} ${extension}`;
+                  fileEntries.push({ file, filename });
+                }
+
+                if (fileEntries.length > 0) {
+                  await uploadSongFilesInBatches(fileEntries);
+                }
+              }
             }
           }
+
+          const songsToUpdate: UpdateSongDTO[] = workingSongs
+            .map((song, index) => {
+              if (!song.id) {
+                return null;
+              }
+              const dto: UpdateSongDTO = {
+                id: song.id,
+                title: song.title,
+                genreIds: song.genreIds,
+                artistIds: song.artistIds,
+                totalDuration: song.totalDuration,
+                coverUrl: coverUrl,
+                order: index,
+              };
+              return dto;
+            })
+            .filter((s): s is UpdateSongDTO => s !== null);
+
+          if (songsToUpdate.length > 0) {
+            await api.put("/api/v1/song/update", songsToUpdate);
+          }
+
+          setSongs(workingSongs);
 
           toast.success("Record updated successfully");
           if (onUpdateSuccess) {
@@ -270,7 +396,10 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
             );
 
             if (songsRes.status == 201) {
-              for (const song of songsRes.data.data) {
+              const createdSongs = songsRes.data.data;
+              const fileEntries: { file: File; filename: string }[] = [];
+
+              for (const song of createdSongs) {
                 const title = song.title;
                 const file = songFiles.get(title);
 
@@ -280,16 +409,12 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
                 }
 
                 const extension = file.name.split(".").pop();
+                const filename = `song song_url ${song.id} ${extension}`;
+                fileEntries.push({ file, filename });
+              }
 
-                const formData = new FormData();
-                formData.append(
-                  "file",
-                  file,
-                  `song song_url ${song.id} ${extension}`
-                );
-                await api.post("/api/v1/files", formData, {
-                  headers: { "Content-Type": "multipart/form-data" },
-                });
+              if (fileEntries.length > 0) {
+                await uploadSongFilesInBatches(fileEntries);
               }
             }
 
@@ -312,6 +437,8 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
       }
     } catch (error) {
       console.error("Error:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -634,15 +761,31 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
             <div className="flex gap-4 pt-6">
               <button
                 onClick={handleBack}
-                className="flex-1 bg-gray-800 py-3 rounded-lg"
+                disabled={isSubmitting}
+                className={`flex-1 bg-gray-800 py-3 rounded-lg ${isSubmitting ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 Back
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 bg-red-500 hover:bg-red-600 py-3 rounded-lg font-semibold"
+                disabled={isSubmitting}
+                className={`flex-1 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 ${isSubmitting
+                  ? "bg-red-500/60 cursor-not-allowed"
+                  : "bg-red-500 hover:bg-red-600"
+                  }`}
               >
-                {isUpdate ? "Update Record" : "Create Record"}
+                {isSubmitting && (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                )}
+                <span>
+                  {isSubmitting
+                    ? isUpdate
+                      ? "Updating..."
+                      : "Creating..."
+                    : isUpdate
+                      ? "Update Record"
+                      : "Create Record"}
+                </span>
               </button>
             </div>
           </div>

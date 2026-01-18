@@ -27,6 +27,14 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (
+      error?.code === "ERR_CANCELED" ||
+      error?.name === "CanceledError" ||
+      error?.message === "canceled"
+    ) {
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config;
 
     if (error.response) {

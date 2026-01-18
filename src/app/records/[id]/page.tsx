@@ -6,11 +6,13 @@ import { usePlayer } from "@/context/PlayerContext";
 import { useUser } from "@/context/UserContext";
 import { RecordPreviewDTO, RecordType } from "@/types/Record";
 import { SongInRecordDTO } from "@/types/Song";
-import { Play, Pause, Clock, Heart, Settings } from "lucide-react";
+import { Play, Pause, Clock, Heart, Settings, Shuffle } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AddRecordPage from "../add/page";
+import api from "@/lib/api";
+import { toast } from "sonner";
 
 const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -35,7 +37,7 @@ export default function RecordPage() {
   const router = useRouter();
   const { getRecordById } = useRecords();
   const { fetchSongsByRecordId } = useSongs();
-  const { playSong, currentSong, isPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
+  const { playSong, playQueue, currentSong, isPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
   const { isAdmin } = useUser();
   const [liked, setLiked] = useState(false);
   const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
@@ -49,6 +51,8 @@ export default function RecordPage() {
     artists: [],
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
 
   const fetchData = async () => {
     const recordId = Array.isArray(id) ? id[0] : id;
@@ -84,7 +88,29 @@ export default function RecordPage() {
   })();
 
   const handlePlaySong = (song: SongInRecordDTO) => {
-    playSong(song);
+    if (currentSong?.songId === song.songId) {
+      toggleGlobalPlay();
+      return;
+    }
+
+    if (!songs.length) return;
+
+    let ordered = [...songs];
+    if (shuffle) {
+      ordered = [...songs];
+      for (let i = ordered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+      }
+    }
+
+    const startIndex = ordered.findIndex(s => s.songId === song.songId);
+    if (startIndex === -1) {
+      playSong(song);
+      return;
+    }
+
+    playQueue(ordered, startIndex);
   };
 
   const isCurrentSongPlaying = (songId: string) => {
@@ -100,6 +126,25 @@ export default function RecordPage() {
       newLiked.add(songId);
     }
     setLikedSongs(newLiked);
+  };
+
+  const handleDeleteRecord = async () => {
+    const recordIdParam = Array.isArray(id) ? id[0] : id;
+    if (!recordIdParam) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this record? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/api/v1/record/delete/${recordIdParam}`);
+      toast.success("Record deleted successfully");
+      router.push("/records");
+    } catch (error) {
+      console.error("Failed to delete record:", error);
+      toast.error("Failed to delete record. Please try again.");
+    }
   };
 
   return (
@@ -170,16 +215,12 @@ export default function RecordPage() {
       </div>
 
       {/* Controls */}
-      <div className="px-6 py-6 bg-gradient-to-b from-black/40 to-black">
-        <div className="flex items-center gap-6">
+      <div className="px-6 py-6 bg-black">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => {
               if (songs.length > 0) {
-                if (currentSong?.songId === songs[0].songId) {
-                  toggleGlobalPlay();
-                } else {
-                  handlePlaySong(songs[0]);
-                }
+                handlePlaySong(songs[0]);
               }
             }}
             className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-400 hover:scale-105 transition flex items-center justify-center"
@@ -191,8 +232,15 @@ export default function RecordPage() {
             )}
           </button>
           <button
+            onClick={() => setShuffle((prev) => !prev)}
+            className={`w-10 h-10 border rounded-full flex items-center justify-center transition ${shuffle ? "border-red-500 text-red-500" : "border-gray-600 text-gray-400 hover:border-white hover:text-white"}`}
+            title="Shuffle"
+          >
+            <Shuffle className="w-5 h-5" />
+          </button>
+          <button
             onClick={() => setLiked(!liked)}
-            className="transition hover:scale-110"
+            className="w-10 h-10 flex items-center justify-center transition hover:scale-110"
           >
             <Heart
               className={`w-8 h-8 ${liked
@@ -202,13 +250,37 @@ export default function RecordPage() {
             />
           </button>
           {isAdmin && (
-            <button
-              onClick={() => setShowUpdateModal(true)}
-              className="transition hover:scale-110"
-              title="Update Record"
-            >
-              <Settings className="w-8 h-8 text-gray-400 hover:text-white" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowSettingsMenu((prev) => !prev)}
+                className="w-10 h-10 flex items-center justify-center rounded-full transition hover:scale-110"
+                title="Record settings"
+              >
+                <Settings className="w-7 h-7 text-gray-400 hover:text-white" />
+              </button>
+              {showSettingsMenu && (
+                <div className="absolute right-0 mt-2 w-40 bg-black border border-zinc-700 rounded-md shadow-lg z-20">
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800"
+                    onClick={() => {
+                      setShowUpdateModal(true);
+                      setShowSettingsMenu(false);
+                    }}
+                  >
+                    Edit record
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-zinc-800"
+                    onClick={() => {
+                      setShowSettingsMenu(false);
+                      handleDeleteRecord();
+                    }}
+                  >
+                    Delete record
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -310,16 +382,16 @@ export default function RecordPage() {
         {songs.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 text-lg mb-2">No songs available</div>
-            <div className="text-gray-500 text-sm">This record doesn't have any songs yet.</div>
+            <div className="text-gray-500 text-sm">This record does not have any songs yet.</div>
           </div>
         )}
       </div>
 
       {/* Update Record Modal */}
       {showUpdateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
           <div className="bg-gray-900 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
-            <div className="max-h-[calc(90vh-80px)] overflow-y-auto">
+            <div className="max-h-[calc(90vh-80px)] overflow-y-auto pb-24">
               <AddRecordPage
                 isUpdate={true}
                 existingRecord={record}

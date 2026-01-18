@@ -60,9 +60,11 @@ export interface SongInRecordDTO {
 }
 
 export interface UpdateSongDTO {
+  id: string;
   title: string;
   genreIds: string[];
   artistIds: string[];
   totalDuration: number;
-  coverUrl: string
+  coverUrl: string;
+  order: number;
 }

@@ -127,7 +127,7 @@ export const ArtistSelector = ({
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query && setShowDropdown(true)}
             placeholder="Search or add featured artists..."
-            className="w-full bg-zinc-900 text-white px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
+            className="w-full bg-zinc-900 text-black px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
           />
         </div>
 

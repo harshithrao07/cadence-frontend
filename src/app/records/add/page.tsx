@@ -3,33 +3,31 @@
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Music, Disc, Album, Trash2, ArrowLeft, X } from "lucide-react";
+import axios from "axios";
 import {
-  NewRecordDTO,
-  NewRecordRequestDTO,
   RecordType,
   RECORD_LIMITS,
+  UpsertRecordDTO,
+  UpsertRecordResponseDTO,
 } from "@/types/Record";
 import { useArtists } from "@/context/ArtistContext";
 import { useUser } from "@/context/UserContext";
 import { usePlayer } from "@/context/PlayerContext";
 import Image from "next/image";
 import api from "@/lib/api";
-import AddSongSection from "@/components/songs/AddSongSection";
-import { AddSongResponseDTO, EachNewSongDTO, NewSongsDTO, SongInRecordDTO, UpdateSongDTO } from "@/types/Song";
+import AddSongSection, { EditableSong } from "@/components/songs/AddSongSection";
+import { EachSongDTO, UpsertSongDTO } from "@/types/Song";
 import { ArtistPreviewDTO } from "@/types/Artists";
 import { RecordPreviewDTO } from "@/types/Record";
 import { toast } from "sonner";
-import { ApiResponse } from "@/types/ApiResponse";
-import { FileUploadResult, FileWithMetadata } from "@/types/Aws";
+import { FileUploadResult, MetadataDTO, HTTPMethod } from "@/types/Aws";
 
 interface AddRecordPageProps {
   isUpdate?: boolean;
   existingRecord?: RecordPreviewDTO;
-  existingSongs?: SongInRecordDTO[];
+  existingSongs?: EachSongDTO[];
   onUpdateSuccess?: () => void;
 }
-
-type EditableSong = EachNewSongDTO & { id?: string };
 
 export default function AddRecordPage({ isUpdate = false, existingRecord, existingSongs = [], onUpdateSuccess }: AddRecordPageProps) {
   const router = useRouter();
@@ -41,7 +39,12 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const [coverPreview, setCoverPreview] = useState<string | null>(existingRecord?.coverUrl || null);
   const fileInputRef = useRef<File | null>(null);
   const fileInputDomRef = useRef<HTMLInputElement>(null);
-  const [newRecord, setNewRecord] = useState<NewRecordDTO>({
+  const [newRecord, setNewRecord] = useState<{
+    title: string;
+    releaseTimestamp: string;
+    recordType: RecordType | null;
+    artistIds: string[];
+  }>({
     title: existingRecord?.title || "",
     releaseTimestamp: existingRecord ? new Date(existingRecord.releaseTimestamp).toISOString().split('T')[0] : "",
     recordType: existingRecord?.recordType || null,
@@ -50,13 +53,13 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const [songs, setSongs] = useState<EditableSong[]>(() => {
     if (isUpdate && existingSongs) {
       return existingSongs.map((song, index) => ({
-        id: song.songId,
+        id: song.id,
         title: song.title,
         genreIds: song.genres?.map(g => g.id) || [], // Extract genre IDs from existing genres
         artistIds: song.artists?.map(a => a.id) || [],
         totalDuration: song.totalDuration,
-        order: song.order ?? index,
-        coverUrl: song.coverUrl,
+        order: index,
+        coverUrl: "",
       }));
     }
     return [];
@@ -92,29 +95,20 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
     };
   }, [isUpdate, resetPlayer]);
 
-  const handleSongsChange = (updatedSongs: EachNewSongDTO[]) => {
-    setSongs((prev) => {
-      const idByTitle = new Map<string, string | undefined>();
-      prev.forEach((song) => {
-        const editable = song as EditableSong;
-        idByTitle.set(song.title.trim(), editable.id);
-      });
+  const [deletedSongIds, setDeletedSongIds] = useState<string[]>([]);
 
-      return updatedSongs.map((song, index) => {
-        const fromTitle = idByTitle.get(song.title.trim());
-        return {
-          ...song,
-          id: fromTitle,
-        };
-      });
-    });
+  const handleSongsChange = (updatedSongs: EditableSong[], deletedIds?: string[]) => {
+    setSongs(updatedSongs);
+    if (deletedIds) {
+      setDeletedSongIds(deletedIds);
+    }
   };
 
   const handleSongFilesChange = (updatedSongFiles: Map<string, File>) => {
     setSongFiles(updatedSongFiles);
   };
 
-  const handleSongUpdate = async (updatedSong: EachNewSongDTO) => {
+  const handleSongUpdate = async (updatedSong: EditableSong) => {
     // TODO: Implement individual song update API call
     // For now, just return a resolved promise
   };
@@ -193,6 +187,11 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   };
 
   const handleSubmit = async () => {
+    if (songs.length === 0) {
+      toast.error("A record must have at least one song.");
+      return;
+    }
+
     if (songs.length > RECORD_LIMITS[selectedType]) {
       toast.error(
         `You can only add up to ${RECORD_LIMITS[selectedType]
@@ -201,242 +200,136 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
       return;
     }
 
-    const recordDTO: NewRecordRequestDTO = {
-      ...newRecord,
+    const recordDTO: UpsertRecordDTO = {
+      id: isUpdate && existingRecord ? existingRecord.id : undefined,
+      title: newRecord.title,
+      releaseTimestamp: newRecord.releaseTimestamp ? new Date(newRecord.releaseTimestamp).getTime() : Date.now(),
       recordType: selectedType,
-      releaseTimestamp: newRecord.releaseTimestamp
-        ? new Date(`${newRecord.releaseTimestamp}T00:00:00`).getTime()
-        : new Date().getTime(),
+      artistIds: newRecord.artistIds,
+      songs: songs.map((song) => ({
+        id: song.id,
+        title: song.title,
+        genreIds: song.genreIds,
+        artistIds: song.artistIds,
+        totalDuration: song.totalDuration,
+      })),
     };
 
     try {
       setIsSubmitting(true);
-      if (isUpdate && existingRecord) {
-        let coverUrl = existingRecord.coverUrl; // Start with existing cover URL
+      
+      const res = await api.post("/api/v1/record/upsert", recordDTO);
 
-        let artistIdsForUpdate = recordDTO.artistIds;
+      if (res.status >= 200 && res.status < 300) {
+        const savedRecord = res.data.data as UpsertRecordResponseDTO;
+        const recordId = savedRecord.id;
 
-        if (selectedType === RecordType.SINGLE) {
-          const songArtistIds = new Set<string>();
-          songs.forEach(song => {
-            song.artistIds.forEach(id => songArtistIds.add(id));
+        if (fileInputRef.current) {
+          const file = fileInputRef.current;
+
+          const formData = new FormData();
+          formData.append(
+            "file",
+            file,
+            `record cover_url ${recordId}`
+          );
+
+          await api.post<FileUploadResult[]>("/api/v1/files", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
           });
-
-          const mergedIds = [...artistIdsForUpdate];
-          songArtistIds.forEach(id => {
-            if (!mergedIds.includes(id)) {
-              mergedIds.push(id);
-            }
-          });
-
-          artistIdsForUpdate = mergedIds;
         }
 
-        const updateRecord = {
-          title: recordDTO.title,
-          releaseTimestamp: recordDTO.releaseTimestamp,
-          artistIds: artistIdsForUpdate
-        }
-        const res = await api.put(`/api/v1/record/update/${existingRecord.id}`, updateRecord);
-        if (res.status == 200) {
-          if (fileInputRef.current) {
-            const file = fileInputRef.current;
-            const extension = file.name.split(".").pop();
+        const savedSongs = savedRecord.songs;
+        if (savedSongs && Array.isArray(savedSongs)) {
+          const uploadPromises: Promise<void>[] = [];
 
-            const formData = new FormData();
-            formData.append(
-              "file",
-              file,
-              `record cover_url ${existingRecord.id} ${extension}`
-            );
+          for (const song of savedSongs) {
+            const title = song.title.trim();
+            const file = songFiles.get(title);
+            if (!file || !song.presignedUrl) continue;
 
-            const uploadRes = await api.post<FileUploadResult[]>("/api/v1/files", formData, {
-              headers: { "Content-Type": "multipart/form-data" },
+            const uploadPromise = axios.put(song.presignedUrl, file, {
+              headers: {
+                "Content-Type": file.type || "application/octet-stream",
+              },
+            }).then(() => {
+              // Upload successful
+            }).catch(err => {
+              console.error(`Failed to upload song ${title}:`, err);
+              toast.error(`Failed to upload song: ${title}`);
             });
-            coverUrl = uploadRes.data[0].url;
+
+            uploadPromises.push(uploadPromise);
           }
 
-          let workingSongs: EditableSong[] = songs.map((song, index) => ({
-            ...song,
-            order: index,
-          }));
-
-          const newSongs = workingSongs.filter((song) => !song.id);
-
-          if (newSongs.length > 0) {
-            const songsDTO: NewSongsDTO = {
-              recordId: existingRecord.id,
-              songs: workingSongs
-                .map((song, index) => ({
-                  song,
-                  index,
-                }))
-                .filter(({ song }) => !song.id)
-                .map(({ song, index }) => ({
-                  title: song.title,
-                  genreIds: song.genreIds,
-                  artistIds: song.artistIds,
-                  totalDuration: song.totalDuration,
-                  order: index,
-                  coverUrl: coverUrl,
-                })),
-            };
-
-            if (songsDTO.songs.length > 0) {
-              const songsRes = await api.post<ApiResponse<AddSongResponseDTO[]>>(
-                "/api/v1/song/add?editMode=true",
-                songsDTO
-              );
-
-              if (songsRes.status == 201) {
-                const created = songsRes.data.data;
-                const idByTitle = new Map(created.map((s) => [s.title, s.id]));
-
-                workingSongs = workingSongs.map((song) => {
-                  if (song.id) return song;
-                  const newId = idByTitle.get(song.title);
-                  if (!newId) return song;
-                  return { ...song, id: newId };
-                });
-
-                const fileEntries: { file: File; filename: string }[] = [];
-
-                for (const createdSong of created) {
-                  const title = createdSong.title;
-                  const file = songFiles.get(title);
-                  if (!file) continue;
-
-                  const extension = file.name.split(".").pop();
-                  const filename = `song song_url ${createdSong.id} ${extension}`;
-                  fileEntries.push({ file, filename });
-                }
-
-                if (fileEntries.length > 0) {
-                  await uploadSongFilesInBatches(fileEntries);
-                }
-              }
-            }
-          }
-
-          const songsToUpdate: UpdateSongDTO[] = workingSongs
-            .map((song, index) => {
-              if (!song.id) {
-                return null;
-              }
-              const dto: UpdateSongDTO = {
-                id: song.id,
-                title: song.title,
-                genreIds: song.genreIds,
-                artistIds: song.artistIds,
-                totalDuration: song.totalDuration,
-                coverUrl: coverUrl,
-                order: index,
-              };
-              return dto;
-            })
-            .filter((s): s is UpdateSongDTO => s !== null);
-
-          if (songsToUpdate.length > 0) {
-            await api.put("/api/v1/song/update", songsToUpdate);
-          }
-
-          setSongs(workingSongs);
-
-          toast.success("Record updated successfully");
-          if (onUpdateSuccess) {
-            onUpdateSuccess();
+          if (uploadPromises.length > 0) {
+            await Promise.all(uploadPromises);
           }
         }
-      } else {
-        // Handle create logic (existing code)
-        const res = await api.post("/api/v1/record/add", recordDTO);
-        let recordId = null;
 
-        if (res.status == 201) {
-          recordId = res.data.data;
-          let coverUrl = null;
-          if (res.status === 201 && fileInputRef.current) {
-            const file = fileInputRef.current;
-            const extension = file.name.split(".").pop();
-
-            const formData = new FormData();
-            formData.append(
-              "file",
-              file,
-              `record cover_url ${recordId} ${extension}`
-            );
-
-            const uploadRes = await api.post<FileUploadResult[]>("/api/v1/files", formData, {
-              headers: { "Content-Type": "multipart/form-data" },
-            });
-            coverUrl = uploadRes.data[0].url;
-          }
-
-          if (songs.length > 0) {
-            const songsDTO: NewSongsDTO = {
-              recordId: recordId,
-              songs: [] as EachNewSongDTO[],
-            };
-
-            for (const song of songs) {
-              const eachNewSongRequestDTO: EachNewSongDTO = {
-                title: song.title,
-                genreIds: song.genreIds,
-                artistIds: song.artistIds,
-                totalDuration: song.totalDuration,
-                order: song.order,
-                coverUrl: coverUrl
+        // Handle song deletions
+        if (deletedSongIds.length > 0) {
+          const deletePromises = deletedSongIds.map(async (songId) => {
+            try {
+              const metadata: MetadataDTO = {
+                category: "song",
+                subCategory: "song_url",
+                primaryKey: songId,
+                httpMethod: HTTPMethod.DELETE
               };
-              songsDTO.songs.push(eachNewSongRequestDTO);
-            }
-
-            const songsRes = await api.post<ApiResponse<AddSongResponseDTO[]>>(
-              "/api/v1/song/add",
-              songsDTO
-            );
-
-            if (songsRes.status == 201) {
-              const createdSongs = songsRes.data.data;
-              const fileEntries: { file: File; filename: string }[] = [];
-
-              for (const song of createdSongs) {
-                const title = song.title;
-                const file = songFiles.get(title);
-
-                if (!file) {
-                  console.error(`File not found for song: ${title}`);
-                  continue;
-                }
-
-                const extension = file.name.split(".").pop();
-                const filename = `song song_url ${song.id} ${extension}`;
-                fileEntries.push({ file, filename });
+              
+              const res = await api.post<string>("/api/v1/files/presigned-url", metadata);
+              if (res.status === 200 && res.data) {
+                const presignedUrl = res.data;
+                await axios.delete(presignedUrl);
               }
-
-              if (fileEntries.length > 0) {
-                await uploadSongFilesInBatches(fileEntries);
-              }
+            } catch (err) {
+              console.error(`Failed to delete song ${songId}:`, err);
+              // Don't block success on deletion failure
             }
-
-            toast.success("Record and songs created successfully");
-            router.push(`/records/${recordId}`);
-          }
-
-          setNewRecord({
-            title: "",
-            releaseTimestamp: "",
-            recordType: null,
-            artistIds: [],
           });
-          setCoverPreview(null);
-          setSelectedType(null);
+          
+          await Promise.all(deletePromises);
+        }
 
-          toast.success("Record created successfully");
+        // Handle record cover deletion
+        if (isUpdate && existingRecord?.coverUrl && !coverPreview && !fileInputRef.current) {
+          try {
+            const metadata: MetadataDTO = {
+              category: "record",
+              subCategory: "cover_url",
+              primaryKey: recordId,
+              httpMethod: HTTPMethod.DELETE
+            };
+            
+            const res = await api.post<string>("/api/v1/files/presigned-url", metadata);
+            if (res.status === 200 && res.data) {
+              const presignedUrl = res.data;
+              await axios.delete(presignedUrl);
+            }
+          } catch (err) {
+            console.error("Failed to delete record cover:", err);
+          }
+        }
+
+        toast.success(isUpdate ? "Record updated successfully" : "Record created successfully");
+
+        const hasNewFile = !!fileInputRef.current;
+        const hasDeletedFile = isUpdate && existingRecord?.coverUrl && !coverPreview && !fileInputRef.current;
+        
+        if (hasNewFile || hasDeletedFile) {
+          toast.info("Changes may take up to 5 minutes to reflect due to caching");
+        }
+        
+        if (isUpdate && onUpdateSuccess) {
+          onUpdateSuccess();
+        } else {
           router.push(`/records/${recordId}`);
         }
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error saving record:", error);
+      toast.error("Failed to save record");
     } finally {
       setIsSubmitting(false);
     }

@@ -9,7 +9,7 @@ import { UserProvider } from "@/context/UserContext";
 
 import { PlayerProvider } from "@/context/PlayerContext";
 import { MusicPlayer } from "@/components/player/MusicPlayer";
-import Link from "next/link";
+import Navbar from "@/components/Navbar";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -31,18 +31,7 @@ export default function RootLayout({ children }) {
                 <SongProvider>
                   <PlayerProvider>
                     <div className="min-h-screen flex flex-col bg-black">
-                      <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-black/80 backdrop-blur">
-                        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-                          <Link href="/" className="text-lg font-bold tracking-tight">
-                            Cadence
-                          </Link>
-                          <div className="flex items-center gap-6 text-sm text-zinc-300">
-                            <Link href="/artists" className="hover:text-white">
-                              Artists
-                            </Link>
-                          </div>
-                        </div>
-                      </nav>
+                      <Navbar />
                       <main className="flex-1 pb-24">{children}</main>
                       <MusicPlayer />
                       <Toaster richColors position="top-right" />

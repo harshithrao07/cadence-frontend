@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState } from "react";
 import api from "../lib/api";
-import { ApiResponse } from "@/types/ApiResponse";
+import { ApiResponseDTO } from "@/types/ApiResponse";
 import { GenrePreviewDTO, NewGenreDTO } from "@/types/Genre";
 
 type GenreContextType = {
@@ -32,13 +32,27 @@ export const GenreProvider: React.FC<{ children: React.ReactNode }> = ({
   const fetchGenres = async () => {
     setLoading(true);
     try {
-      const res = await api.get<ApiResponse<GenrePreviewDTO[]>>(
+      const res = await api.get<any>(
         "/api/v1/genre/all"
       );
 
-      if (res.data.success) {
-        setGenres(res.data.data);
+      // Handle different response structures
+      let data: GenrePreviewDTO[] = [];
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        data = res.data.data;
+      } else if (res.data?.data?.content && Array.isArray(res.data.data.content)) {
+        // Handle paginated response wrapped in ApiResponse
+        data = res.data.data.content;
+      } else if (Array.isArray(res.data)) {
+        data = res.data;
+      } else if (res.data?.content && Array.isArray(res.data.content)) {
+        data = res.data.content;
+      } else if (res.data?.data && Array.isArray(res.data.data)) {
+        // Fallback for success=undefined but data exists
+        data = res.data.data;
       }
+
+      setGenres(data);
     } catch (err) {
       console.error("Failed to fetch genres:", err);
     } finally {
@@ -50,14 +64,30 @@ export const GenreProvider: React.FC<{ children: React.ReactNode }> = ({
     key: string
   ): Promise<GenrePreviewDTO[] | null> => {
     try {
-      const res = await api.get<ApiResponse<GenrePreviewDTO[]>>(
+      const res = await api.get<any>(
         "/api/v1/genre/all",
         { params: { key } }
       );
 
-      if (res.data.success) {
+      // Handle different response structures
+      if (res.data?.success && Array.isArray(res.data.data)) {
         return res.data.data;
       }
+      if (res.data?.data?.content && Array.isArray(res.data.data.content)) {
+        return res.data.data.content;
+      }
+      if (Array.isArray(res.data)) {
+        return res.data;
+      }
+      if (res.data?.content && Array.isArray(res.data.content)) {
+        return res.data.content;
+      }
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        return res.data.data;
+      }
+      
+      console.log("Genre search response format not recognized:", res.data);
+      return [];
     } catch (err) {
       console.error("Failed to search genres:", err);
     }
@@ -67,7 +97,7 @@ export const GenreProvider: React.FC<{ children: React.ReactNode }> = ({
   const addGenre = async (
     dto: NewGenreDTO
   ): Promise<GenrePreviewDTO | null> => {
-    const res = await api.post<ApiResponse<string>>("/api/v1/genre/add", dto);
+    const res = await api.post<ApiResponseDTO<string>>("/api/v1/genre/add", dto);
 
     if (!res.data.success) return null;
 

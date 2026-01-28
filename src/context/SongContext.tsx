@@ -2,15 +2,15 @@
 
 import React, { createContext, useContext, useState } from "react";
 import api from "../lib/api";
-import { ApiResponse } from "@/types/ApiResponse";
-import { SongInRecordDTO } from "@/types/Song";
+import { ApiResponseDTO } from "@/types/ApiResponse";
+import { EachSongDTO } from "@/types/Song";
 
 type SongContextType = {
-  songsByRecordId: Record<string, SongInRecordDTO[]>;
+  songsByRecordId: Record<string, EachSongDTO[]>;
   loading: boolean;
-  fetchSongsByRecordId: (recordId: string, forceRefresh?: boolean) => Promise<SongInRecordDTO[] | null>;
+  fetchSongsByRecordId: (recordId: string, forceRefresh?: boolean) => Promise<EachSongDTO[] | null>;
 };
-
+  
 const SongContext = createContext<SongContextType | undefined>(undefined);
 
 export const useSongs = () => {
@@ -24,7 +24,7 @@ export const useSongs = () => {
 export const SongProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [songsByRecordId, setSongsByRecordId] = useState<Record<string, SongInRecordDTO[]>>({});
+  const [songsByRecordId, setSongsByRecordId] = useState<Record<string, EachSongDTO[]>>({});
   const [loading, setLoading] = useState(false);
   const songsByRecordIdRef = React.useRef(songsByRecordId);
 
@@ -35,7 +35,7 @@ export const SongProvider: React.FC<{ children: React.ReactNode }> = ({
   const fetchSongsByRecordId = React.useCallback(async (
     recordId: string,
     forceRefresh = false
-  ): Promise<SongInRecordDTO[] | null> => {
+  ): Promise<EachSongDTO[] | null> => {
     // ✅ Cache hit
     if (!forceRefresh && songsByRecordIdRef.current[recordId]) {
       return songsByRecordIdRef.current[recordId];
@@ -43,8 +43,11 @@ export const SongProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setLoading(true);
     try {
-      const res = await api.get<ApiResponse<SongInRecordDTO[]>>(
-        `/api/v1/song/songsByRecord/${recordId}`
+      const res = await api.get<ApiResponseDTO<EachSongDTO[]>>(
+        `/api/v1/song/all`,
+        {
+          params: { recordId }
+        }
       );
 
       if (res.data.success) {

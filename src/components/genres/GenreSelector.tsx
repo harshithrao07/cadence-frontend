@@ -35,7 +35,7 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
 
       setLoading(true);
       const data = await searchGenres(query);
-      setResults(data);
+      setResults(Array.isArray(data) ? data : []);
       setLoading(false);
       setShowDropdown(true);
     }, 300);
@@ -60,7 +60,10 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
     setShowDropdown(false);
   };
 
-  const handleAddGenre = async () => {
+  const handleAddGenre = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const trimmed = query.trim();
     if (!trimmed) return;
 
@@ -70,7 +73,8 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
       (g) => g.type.trim().toUpperCase() === formattedType
     );
 
-    const alreadyExistsInAll = allGenres.some(
+    const safeAllGenres = Array.isArray(allGenres) ? allGenres : [];
+    const alreadyExistsInAll = safeAllGenres.some(
       (g) => g.type.trim().toUpperCase() === formattedType
     );
 
@@ -115,32 +119,46 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
 
       <div className="relative">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-black" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             value={query}
             autoComplete="off"
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => query && setShowDropdown(true)}
+            onFocus={() => {
+              if (query.trim() || results.length > 0) {
+                setShowDropdown(true);
+              }
+            }}
+            onBlur={(e) => {
+               // Check if the new focus is within the dropdown
+               if (e.relatedTarget && e.relatedTarget.closest('.genre-dropdown')) {
+                 return;
+               }
+               // Delay hiding dropdown to allow clicking on items
+               setTimeout(() => setShowDropdown(false), 200);
+            }}
             placeholder="Search or add genres..."
-            className="w-full bg-zinc-900 text-black px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
+            className="w-full bg-black text-white px-10 py-3 rounded-lg border border-zinc-800 focus:border-red-500 focus:outline-none transition-colors"
           />
         </div>
 
-        {showDropdown && (query || results.length > 0) && (
-          <div className="absolute z-10 w-full mt-2 bg-white border border-zinc-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+        {showDropdown && (
+          <div className="genre-dropdown absolute z-10 w-full mt-2 bg-black border border-zinc-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
             {loading && (
-              <div className="px-4 py-3 text-sm text-zinc-500">
+              <div className="px-4 py-3 text-sm text-gray-400">
                 Searching...
               </div>
             )}
 
             {!loading && results.length === 0 && query && (
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()} // Prevent blur on mouse down
                 onClick={handleAddGenre}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-900 transition-colors text-left"
               >
                 <Plus size={18} className="text-red-500" />
-                <span className="text-black">
+                <span className="text-white">
                   Create &quot;{query.trim().toUpperCase()}&quot;
                 </span>
               </button>
@@ -150,9 +168,9 @@ export const GenreSelector = ({ selectedGenreIds, setSelectedGenreIds }) => {
               <button
                 key={genre.id}
                 onClick={() => toggleGenre(genre)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-100 transition-colors text-left"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-900 transition-colors text-left"
               >
-                <span className="text-black">{genre.type}</span>
+                <span className="text-white">{genre.type}</span>
                 {selectedGenreIds.includes(genre.id) && (
                   <span className="text-red-500 text-xs font-semibold">
                     ✓ Selected

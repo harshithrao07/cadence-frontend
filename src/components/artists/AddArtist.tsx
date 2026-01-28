@@ -2,10 +2,13 @@
 
 import React, { useState } from "react";
 import { X } from "lucide-react";
-import { NewArtistDTO } from "../../types/Artists";
+import { UpsertArtistDTO } from "../../types/Artists";
 import api from "../../lib/api";
 import ProfilePictureSelector from "@/components/auth/ProfilePictureSelector";
 import { useArtists } from "@/context/ArtistContext";
+import { MetadataDTO, HTTPMethod } from "@/types/Aws";
+import axios from "axios";
+import { toast } from "sonner";
 
 interface AddArtistProps {
   setShowAddForm: (show: boolean) => void;
@@ -30,7 +33,7 @@ const AddArtist: React.FC<AddArtistProps> = ({
   mode = "create",
   onArtistSaved
 }) => {
-  const [newArtist, setNewArtist] = useState<NewArtistDTO>({
+  const [newArtist, setNewArtist] = useState<UpsertArtistDTO>({
     name: initialArtist?.name || "",
     description: initialArtist?.description || "",
   });
@@ -57,96 +60,95 @@ const AddArtist: React.FC<AddArtistProps> = ({
     }
 
     try {
-      if (mode === "edit" && initialArtist?.id) {
-        const res = await api.put(
-          `/api/v1/artist/update/${initialArtist.id}`,
-          newArtist
-        );
+      const payload = {
+        id: initialArtist?.id || null,
+        name: newArtist.name,
+        description: newArtist.description,
+      };
 
-        if (res.status >= 200 && res.status < 300) {
-          let profileUrl = initialArtist.profileUrl || null;
-          const artistId = initialArtist.id;
+      const res = await api.post("/api/v1/artist/upsert", payload);
 
-          if (fileInputRef) {
-            const formData = new FormData();
-            const extension = fileInputRef.name.split(".").pop();
-
-            formData.append(
-              "file",
-              fileInputRef,
-              "artist profile_url " + artistId + " " + extension
-            );
-
-            const fileRes = await api.post(`/api/v1/files`, formData, {
-              headers: { "Content-Type": "multipart/form-data" },
-            });
-
-            if (Array.isArray(fileRes.data) && fileRes.data.length > 0) {
-              profileUrl = fileRes.data[0].url;
+      if (res.status >= 200 && res.status < 300) {
+        let artistId = initialArtist?.id;
+        
+        // If creating (no initial ID), get ID from response
+        if (!artistId) {
+            // Assuming response data is the ID (string) or object with ID
+            if (typeof res.data.data === 'string') {
+                artistId = res.data.data;
+            } else if (res.data.data?.id) {
+                artistId = res.data.data.id;
             }
-          }
-
-          const updatedArtist = {
-            id: artistId,
-            name: newArtist.name,
-            description: newArtist.description,
-            profileUrl,
-          };
-
-          refreshArtists();
-          if (onArtistSaved) {
-            onArtistSaved(updatedArtist);
-          }
-          setNewArtist({ name: "", description: "" });
-          setProfilePic(null);
-          setShowAddForm(false);
-          setErrors({});
         }
-      } else {
-        const res = await api.post("/api/v1/artist/add", newArtist);
-        let profileUrl = null;
-        let artistId = null;
 
-        if (res.status == 201) {
-          artistId = res.data.data;
+        if (!artistId) {
+            console.error("Failed to get artist ID from response");
+            return;
+        }
 
-          if (fileInputRef) {
-            const formData = new FormData();
-            const extension = fileInputRef.name.split(".").pop();
+        let profileUrl = initialArtist?.profileUrl || null;
 
-            formData.append(
-              "file",
-              fileInputRef,
-              "artist profile_url " + artistId + " " + extension
-            );
+        const hasNewFile = fileInputRef && profilePic;
+        const hasDeletedFile = !profilePic && initialArtist?.profileUrl;
 
-            const fileRes = await api.post(`/api/v1/files`, formData, {
-              headers: { "Content-Type": "multipart/form-data" },
-            });
+        if (hasNewFile) {
+          const formData = new FormData();
+          const filename = "artist profile_url " + artistId;
 
-            if (Array.isArray(fileRes.data) && fileRes.data.length > 0) {
-              profileUrl = fileRes.data[0].url;
+          formData.append("file", fileInputRef, filename);
+
+          const fileRes = await api.post(`/api/v1/files`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+          if (Array.isArray(fileRes.data) && fileRes.data.length > 0) {
+            profileUrl = fileRes.data[0].url;
+          }
+        } else if (hasDeletedFile) {
+          profileUrl = null;
+          
+          try {
+            const metadata: MetadataDTO = {
+              category: "artist",
+              subCategory: "profile_url",
+              primaryKey: artistId,
+              httpMethod: HTTPMethod.DELETE
+            };
+            
+            const res = await api.post<string>("/api/v1/files/presigned-url", metadata);
+            if (res.status === 200 && res.data) {
+              const presignedUrl = res.data;
+              await axios.delete(presignedUrl);
             }
+          } catch (err) {
+            console.error("Failed to delete artist profile picture:", err);
           }
-
-          const artistWithProfile = {
-            ...newArtist,
-            profileUrl: profileUrl,
-            id: artistId,
-          };
-
-          refreshArtists();
-          if (onArtistSaved) {
-            onArtistSaved(artistWithProfile);
-          }
-          setNewArtist({ name: "", description: "" });
-          setProfilePic(null);
-          setShowAddForm(false);
-          setErrors({});
         }
+
+        const savedArtist = {
+          id: artistId,
+          name: newArtist.name,
+          description: newArtist.description,
+          profileUrl,
+        };
+
+        refreshArtists();
+        if (onArtistSaved) {
+          onArtistSaved(savedArtist);
+        }
+
+        toast.success(mode === "edit" ? "Artist updated successfully" : "Artist created successfully");
+        if (hasNewFile || hasDeletedFile) {
+          toast.info("Changes may take up to 5 minutes to reflect due to caching");
+        }
+
+        setNewArtist({ name: "", description: "" });
+        setProfilePic(null);
+        setShowAddForm(false);
+        setErrors({});
       }
     } catch (error) {
-      console.error("Error adding artist:", error);
+      console.error("Error saving artist:", error);
     }
   };
 

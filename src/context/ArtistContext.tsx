@@ -4,8 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { ArtistPreviewDTO } from "../types/Artists";
 import api from "../lib/api";
 import { usePathname } from "next/navigation";
-import { ApiResponse } from "@/types/ApiResponse";
-import { Page } from "@/types/ApiResponse";
+import { ApiResponseDTO, PaginatedResponseDTO } from "@/types/ApiResponse";
 
 type ArtistsContextType = {
   artists: ArtistPreviewDTO[];
@@ -47,7 +46,7 @@ export const ArtistsProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const finalSearchKey = query !== undefined ? query : searchKey;
 
-      const res = await api.get<ApiResponse<Page<ArtistPreviewDTO>>>(
+      const res = await api.get<ApiResponseDTO<PaginatedResponseDTO<ArtistPreviewDTO>>>(
         "/api/v1/artist/all",
         {
           params: {
@@ -60,8 +59,9 @@ export const ArtistsProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const pageData = res.data.data;
 
-      if (query === undefined) {
-        // Only update global artist list if this is a global state search
+      if (query === undefined || replace) {
+        // Update global artist list if this is a global state search (query undefined)
+        // OR if we are explicitly replacing the list (e.g. new search)
         setArtists((prev) =>
           replace ? pageData.content : [...prev, ...pageData.content]
         );

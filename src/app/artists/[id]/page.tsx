@@ -8,20 +8,25 @@ import {
   MoreHorizontal,
   Shuffle,
   Disc,
+  UserPlus,
+  UserCheck,
+  Users,
+  X,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import api from "@/lib/api";
 import { ArtistProfileDTO } from "@/types/Artists";
 import { RecordPreviewDTO } from "@/types/Record";
-import { ApiResponse } from "@/types/ApiResponse";
+import { ApiResponseDTO } from "@/types/ApiResponse";
 import Image from "next/image";
 import { useArtists } from "@/context/ArtistContext";
 import { useUser } from "@/context/UserContext";
 import { useRouter } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
-import { SongInRecordDTO, TrackPreviewDTO } from "@/types/Song";
+import { EachSongDTO, TopSongsInArtistProfileDTO } from "@/types/Song";
 import { toast } from "sonner";
 import AddArtist from "../../../components/artists/AddArtist";
+import { UserPreviewDTO } from "@/types/User";
 
 export default function ArtistProfile() {
   const { getArtistById, refreshArtists } = useArtists();
@@ -39,12 +44,16 @@ export default function ArtistProfile() {
     popularSongs: [],
     artistRecords: [],
   });
-  const [popularSongs, setPopularSongs] = useState<TrackPreviewDTO[]>([]);
+  const [popularSongs, setPopularSongs] = useState<TopSongsInArtistProfileDTO[]>([]);
   const [artistRecords, setArtistRecords] = useState<RecordPreviewDTO[]>([]);
   const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [followersList, setFollowersList] = useState<UserPreviewDTO[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -61,15 +70,30 @@ export default function ArtistProfile() {
 
     // Fetch artist data based on id
     const fetchArtistData = async (artistId) => {
-      const res = await api.get<ApiResponse<ArtistProfileDTO>>(
-        "/api/v1/artist/" + artistId
-      );
-      setArtist(res.data.data);
-      setPopularSongs(res.data.data.popularSongs);
-      setArtistRecords(res.data.data.artistRecords);
+      try {
+        const res = await api.get<ApiResponseDTO<ArtistProfileDTO>>(
+          "/api/v1/artist/" + artistId
+        );
+        setArtist(res.data.data);
+        setPopularSongs(res.data.data.popularSongs);
+        setArtistRecords(res.data.data.artistRecords);
+      } catch (error) {
+        console.error("Failed to fetch artist data:", error);
+      }
+    };
+
+    const checkIsFollowing = async (artistId: string) => {
+      try {
+        const res = await api.get(`/api/v1/artist/${artistId}/isFollowing`);
+        // Assuming the API returns a boolean directly or wrapped in data
+        setIsFollowing(!!res.data.data);
+      } catch (e) {
+        console.error("Failed to check follow status", e);
+      }
     };
 
     fetchArtistData(artistId);
+    checkIsFollowing(artistId);
   }, [id]);
 
   const toggleLike = (id) => {
@@ -82,6 +106,44 @@ export default function ArtistProfile() {
       }
       return newSet;
     });
+  };
+
+  const handleFollowToggle = async () => {
+    const artistIdParam = Array.isArray(id) ? id[0] : id;
+    if (!artistIdParam) return;
+
+    try {
+      if (isFollowing) {
+        await api.post(`/api/v1/artist/${artistIdParam}/unfollow`);
+        setIsFollowing(false);
+        setArtist((prev) => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+        toast.success("Unfollowed artist");
+      } else {
+        await api.post(`/api/v1/artist/${artistIdParam}/follow`);
+        setIsFollowing(true);
+        setArtist((prev) => ({ ...prev, followers: prev.followers + 1 }));
+        toast.success("Following artist");
+      }
+    } catch (e) {
+      console.error("Failed to toggle follow", e);
+      toast.error("Failed to update follow status");
+    }
+  };
+
+  const fetchFollowers = async () => {
+    const artistIdParam = Array.isArray(id) ? id[0] : id;
+    if (!artistIdParam) return;
+
+    setLoadingFollowers(true);
+    try {
+      const res = await api.get(`/api/v1/artist/${artistIdParam}/followers`);
+      setFollowersList(res.data.data || []);
+    } catch (e) {
+      console.error("Failed to fetch followers", e);
+      toast.error("Failed to load followers");
+    } finally {
+      setLoadingFollowers(false);
+    }
   };
 
   const formatReleaseDate = (timestamp: string | number) => {
@@ -97,11 +159,11 @@ export default function ArtistProfile() {
   };
 
   const isCurrentSongPlaying = (songId: string) => {
-    return currentSong?.songId === songId && isGlobalPlaying;
+    return currentSong?.id === songId && isGlobalPlaying;
   };
 
-  const handlePlayPopularSong = (track: TrackPreviewDTO) => {
-    if (currentSong?.songId === track.songId) {
+  const handlePlayPopularSong = (track: TopSongsInArtistProfileDTO) => {
+    if (currentSong?.id === track.id) {
       toggleGlobalPlay();
       return;
     }
@@ -117,30 +179,24 @@ export default function ArtistProfile() {
       }
     }
 
-    const queueSongs: SongInRecordDTO[] = orderedTracks.map((t) => ({
-      songId: t.songId,
+    const queueSongs: EachSongDTO[] = orderedTracks.map((t) => ({
+      id: t.id,
       title: t.title,
       totalDuration: t.totalDuration,
-      coverUrl: t.coverUrl,
       artists: t.artists,
-      createdBy: [],
-      songUrl: "",
-      order: 0,
-      genres: []
+      genres: [],
+      recordId: t.recordId,
     }));
 
-    const startIndex = queueSongs.findIndex(s => s.songId === track.songId);
+    const startIndex = queueSongs.findIndex(s => s.id === track.id);
     if (startIndex === -1) {
-      const songToPlay: SongInRecordDTO = {
-        songId: track.songId,
+      const songToPlay: EachSongDTO = {
+        id: track.id,
         title: track.title,
         totalDuration: track.totalDuration,
-        coverUrl: track.coverUrl,
         artists: track.artists,
-        createdBy: [],
-        songUrl: "",
-        order: 0,
-        genres: []
+        genres: [],
+        recordId: track.recordId,
       };
       playSong(songToPlay);
       return;
@@ -149,24 +205,31 @@ export default function ArtistProfile() {
     playQueue(queueSongs, startIndex);
   };
 
-  const handleDeleteArtist = async () => {
+  const handleDeleteArtist = () => {
     const artistIdParam = Array.isArray(id) ? id[0] : id;
     if (!artistIdParam) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this artist? This action cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      await api.delete(`/api/v1/artist/delete/${artistIdParam}`);
-      await refreshArtists();
-      toast.success("Artist deleted successfully");
-      router.push("/artists");
-    } catch (error) {
-      console.error("Failed to delete artist:", error);
-      toast.error("Failed to delete artist. Please try again.");
-    }
+    toast("Are you sure you want to delete this artist?", {
+      description: "This action cannot be undone.",
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            await api.delete(`/api/v1/artist/delete/${artistIdParam}`);
+            await refreshArtists();
+            toast.success("Artist deleted successfully");
+            router.push("/artists");
+          } catch (error) {
+            console.error("Failed to delete artist:", error);
+            toast.error("Failed to delete artist. Please try again.");
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
   };
 
   if (isEditing) {
@@ -181,7 +244,7 @@ export default function ArtistProfile() {
               ...prev,
               name: updated.name,
               description: updated.description || "",
-              profileUrl: updated.profileUrl || prev.profileUrl,
+              profileUrl: updated.profileUrl ?? prev.profileUrl,
             }));
           }}
         />
@@ -216,9 +279,19 @@ export default function ArtistProfile() {
               <span className="text-sm">Verified Artist</span>
             </div>
             <h1 className="text-7xl font-bold mb-4">{artist.name}</h1>
-            <p className="text-sm">
-              {artist.monthlyListeners} monthly listeners
-            </p>
+            <div className="flex items-center gap-4 text-sm text-gray-300">
+              <span>{artist.monthlyListeners} monthly listeners</span>
+              <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+              <button 
+                onClick={() => {
+                  setShowFollowers(true);
+                  fetchFollowers();
+                }}
+                className="hover:text-white hover:underline transition flex items-center gap-1"
+              >
+                {artist.followers} followers
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -231,7 +304,7 @@ export default function ArtistProfile() {
             <button
               onClick={() => {
                 if (popularSongs.length > 0) {
-                  if (isCurrentSongPlaying(popularSongs[0].songId)) {
+                  if (isCurrentSongPlaying(popularSongs[0].id)) {
                     toggleGlobalPlay();
                   } else {
                     handlePlayPopularSong(popularSongs[0]);
@@ -240,10 +313,31 @@ export default function ArtistProfile() {
               }}
               className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 hover:scale-105 transition"
             >
-              {popularSongs.length > 0 && isCurrentSongPlaying(popularSongs[0].songId) ? (
+              {popularSongs.length > 0 && isCurrentSongPlaying(popularSongs[0].id) ? (    
                 <Pause fill="black" className="text-black" />
               ) : (
                 <Play fill="black" className="text-black ml-1" />
+              )}
+            </button>
+
+            <button
+              onClick={handleFollowToggle}
+              className={`h-10 px-6 rounded-full flex items-center gap-2 font-bold transition border ${
+                isFollowing 
+                  ? "border-zinc-600 text-white hover:border-zinc-400" 
+                  : "border-transparent bg-white text-black hover:scale-105"
+              }`}
+            >
+              {isFollowing ? (
+                <>
+                  <UserCheck className="w-4 h-4" />
+                  Following
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  Follow
+                </>
               )}
             </button>
 
@@ -305,11 +399,11 @@ export default function ArtistProfile() {
           <div className="space-y-2">
             {popularSongs.map((track, index) => (
               <div
-                key={track.songId}
+                key={track.id}
                 className="grid grid-cols-[auto_auto_1fr_auto] gap-4 items-center p-2 rounded hover:bg-white/10 group transition"
               >
                 <div className="w-8 text-gray-400 group-hover:hidden text-center flex items-center justify-center">
-                  {isCurrentSongPlaying(track.songId) ? (
+                  {isCurrentSongPlaying(track.id) ? (
                     <div className="flex gap-0.5 items-end h-3">
                       <span className="w-0.5 bg-red-500 animate-pulse h-1.5"></span>
                       <span className="w-0.5 bg-red-500 animate-pulse h-3" style={{ animationDelay: "0.2s" }}></span>
@@ -323,7 +417,7 @@ export default function ArtistProfile() {
                   onClick={() => handlePlayPopularSong(track)}
                   className="w-8 hidden group-hover:flex justify-center"
                 >
-                  {isCurrentSongPlaying(track.songId) ? (
+                  {isCurrentSongPlaying(track.id) ? (
                     <Pause fill="white" className="w-4 h-4" />
                   ) : (
                     <Play fill="white" className="w-4 h-4" />
@@ -338,7 +432,7 @@ export default function ArtistProfile() {
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
                   <div>
-                    <div className={`font-semibold truncate ${isCurrentSongPlaying(track.songId) ? "text-red-500" : "text-white"}`}>
+                    <div className={`font-semibold truncate ${isCurrentSongPlaying(track.id) ? "text-red-500" : "text-white"}`}>  
                       {track.title}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
@@ -365,11 +459,11 @@ export default function ArtistProfile() {
                 </div>
                 <div className="flex items-center gap-4 justify-end">
                   <button
-                    onClick={() => toggleLike(track.songId)}
+                    onClick={() => toggleLike(track.id)}
                     className="opacity-0 group-hover:opacity-100 transition"
                   >
                     <Heart
-                      className={`w-5 h-5 ${likedSongs.has(track.songId)
+                      className={`w-5 h-5 ${likedSongs.has(track.id)
                         ? "fill-red-500 text-red-500"
                         : "text-gray-400"
                         }`}
@@ -461,6 +555,59 @@ export default function ArtistProfile() {
           </div>
         </div>
       </div>
+      {/* Followers Modal */}
+      {showFollowers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowFollowers(false)}>
+          <div className="bg-black border border-zinc-800 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-zinc-800">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Users className="w-5 h-5 text-red-500" />
+                Followers
+              </h3>
+              <button 
+                onClick={() => setShowFollowers(false)}
+                className="text-zinc-400 hover:text-white transition rounded-full hover:bg-zinc-800 p-2"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto p-2 flex-1 custom-scrollbar">
+              {loadingFollowers ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                </div>
+              ) : followersList.length > 0 ? (
+                <div className="space-y-1">
+                  {followersList.map((follower) => (
+                    <div key={follower.id} className="flex items-center gap-3 p-3 hover:bg-zinc-800/50 rounded-xl transition cursor-pointer" onClick={() => router.push(`/profile/${follower.id}`)}>
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-800 flex-shrink-0">
+                        {follower.profileUrl ? (
+                          <Image 
+                            src={follower.profileUrl} 
+                            alt={follower.name} 
+                            fill 
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full w-full text-zinc-500 font-bold bg-zinc-800">
+                            {follower.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="font-medium truncate flex-1">{follower.name}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-zinc-500">
+                  No followers yet
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

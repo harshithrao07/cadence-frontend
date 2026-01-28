@@ -5,7 +5,7 @@ import { useSongs } from "@/context/SongContext";
 import { usePlayer } from "@/context/PlayerContext";
 import { useUser } from "@/context/UserContext";
 import { RecordPreviewDTO, RecordType } from "@/types/Record";
-import { SongInRecordDTO } from "@/types/Song";
+import { EachSongDTO } from "@/types/Song";
 import { Play, Pause, Clock, Heart, Settings, Shuffle } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
@@ -41,7 +41,7 @@ export default function RecordPage() {
   const { isAdmin } = useUser();
   const [liked, setLiked] = useState(false);
   const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
-  const [songs, setSongs] = useState<SongInRecordDTO[]>([]);
+  const [songs, setSongs] = useState<EachSongDTO[]>([]);
   const [record, setRecord] = useState<RecordPreviewDTO>({
     id: "",
     title: "Loading...",
@@ -87,8 +87,8 @@ export default function RecordPage() {
     return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''} ${totalSeconds} second${totalSeconds !== 1 ? 's' : ''}`;
   })();
 
-  const handlePlaySong = (song: SongInRecordDTO) => {
-    if (currentSong?.songId === song.songId) {
+  const handlePlaySong = (song: EachSongDTO) => {
+    if (currentSong?.id === song.id) {
       toggleGlobalPlay();
       return;
     }
@@ -104,7 +104,7 @@ export default function RecordPage() {
       }
     }
 
-    const startIndex = ordered.findIndex(s => s.songId === song.songId);
+    const startIndex = ordered.findIndex(s => s.id === song.id);
     if (startIndex === -1) {
       playSong(song);
       return;
@@ -114,7 +114,7 @@ export default function RecordPage() {
   };
 
   const isCurrentSongPlaying = (songId: string) => {
-    return currentSong?.songId === songId && isPlaying;
+    return currentSong?.id === songId && isPlaying;
   };
 
   const toggleLikeSong = (e: React.MouseEvent, songId: string) => {
@@ -225,7 +225,7 @@ export default function RecordPage() {
             }}
             className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-400 hover:scale-105 transition flex items-center justify-center"
           >
-            {songs.length > 0 && isCurrentSongPlaying(songs[0]?.songId) ? (
+            {songs.length > 0 && isCurrentSongPlaying(songs[0]?.id) ? (
               <Pause className="w-6 h-6 text-black fill-black" />
             ) : (
               <Play className="w-6 h-6 text-black fill-black ml-1" />
@@ -298,12 +298,12 @@ export default function RecordPage() {
 
         {songs.map((song, index) => (
           <div
-            key={song.songId}
+            key={song.id}
             className="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-3 rounded hover:bg-white/10 group cursor-pointer transition"
             onClick={() => handlePlaySong(song)}
           >
             <div className="flex items-center justify-center text-gray-400 group-hover:text-white">
-              {isCurrentSongPlaying(song.songId) ? (
+              {isCurrentSongPlaying(song.id) ? (
                 <div className="flex gap-0.5 items-end h-4">
                   <span className="w-0.5 bg-red-500 animate-pulse h-2"></span>
                   <span
@@ -322,7 +322,7 @@ export default function RecordPage() {
             </div>
             <div className="flex items-center gap-3">
               <Image
-                src={song.coverUrl || "/images/records/record-placeholder.png"}
+                src={record.coverUrl || "/images/records/record-placeholder.png"}
                 alt={song.title}
                 className="w-10 h-10 md:hidden"
                 width={40}
@@ -330,7 +330,7 @@ export default function RecordPage() {
               />
               <div>
                 <div
-                  className={`font-medium ${isCurrentSongPlaying(song.songId) ? "text-red-500" : "text-white"
+                  className={`font-medium ${isCurrentSongPlaying(song.id) ? "text-red-500" : "text-white"
                     }`}
                 >
                   {song.title}
@@ -361,15 +361,15 @@ export default function RecordPage() {
             </div>
             <div className="flex items-center justify-center">
               <button
-                onClick={(e) => toggleLikeSong(e, song.songId)}
+                onClick={(e) => toggleLikeSong(e, song.id)}
                 className="opacity-0 group-hover:opacity-100 transition hover:scale-110"
               >
                 <Heart
-                  className={`w-5 h-5 ${likedSongs.has(song.songId)
+                  className={`w-5 h-5 ${likedSongs.has(song.id)
                     ? "fill-red-500 text-red-500 opacity-100"
                     : "text-gray-400 hover:text-white"
                     }`}
-                  style={likedSongs.has(song.songId) ? { opacity: 1 } : {}}
+                  style={likedSongs.has(song.id) ? { opacity: 1 } : {}}
                 />
               </button>
             </div>

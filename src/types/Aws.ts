@@ -1,15 +1,17 @@
-export interface SaveFileDTO {
-  category: string;
-  subCategory: string;
-  name: string;
-  extension: string;
+export enum HTTPMethod {
+  GET = "GET",
+  POST = "POST",
+  PUT = "PUT",
+  DELETE = "DELETE",
+  HEAD = "HEAD",
+  PATCH = "PATCH",
 }
 
-export interface FileWithMetadata {
-  file: FormData;
-  tableName: string;
-  columnName: string;
+export interface MetadataDTO {
+  category: string;
+  subCategory: string;
   primaryKey: string;
+  httpMethod: HTTPMethod;
 }
 
 export interface FileUploadResult {

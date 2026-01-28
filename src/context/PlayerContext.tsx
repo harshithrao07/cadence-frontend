@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useRef, useEffect } from "react";
-import { SongInRecordDTO } from "@/types/Song";
+import { EachSongDTO } from "@/types/Song";
 import { PlayerContextType } from "@/types/Player";
 import api from "@/lib/api";
 
@@ -16,17 +16,17 @@ export const usePlayer = () => {
 };
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentSong, setCurrentSong] = useState<SongInRecordDTO | null>(null);
+  const [currentSong, setCurrentSong] = useState<EachSongDTO | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.5);
-  const [queue, setQueue] = useState<SongInRecordDTO[]>([]);
+  const [queue, setQueue] = useState<EachSongDTO[]>([]);
   const [queueIndex, setQueueIndex] = useState<number>(-1);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
-  const queueRef = useRef<SongInRecordDTO[]>([]);
+  const queueRef = useRef<EachSongDTO[]>([]);
   const queueIndexRef = useRef<number>(-1);
   const requestControllerRef = useRef<AbortController | null>(null);
   const playRequestIdRef = useRef(0);
@@ -72,7 +72,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [volume]);
 
   const loadAndPlaySong = React.useCallback(
-    async (song: SongInRecordDTO) => {
+    async (song: EachSongDTO) => {
       if (!audioRef.current) return;
 
       const requestId = ++playRequestIdRef.current;
@@ -97,13 +97,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (localFile) {
           const blob = new Blob([localFile], { type: localFile.type || "audio/mpeg" });
           url = window.URL.createObjectURL(blob);
-        } else if (song.songUrl) {
-          url = song.songUrl;
         } else {
           controller = new AbortController();
           requestControllerRef.current = controller;
           const response = await api.get(
-            `api/v1/song/stream/${song.songId}`,
+            `api/v1/song/stream/${song.id}`,
             {
               responseType: "blob",
               signal: controller.signal,
@@ -177,7 +175,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [loadAndPlaySong]);
 
   const playSong = React.useCallback(
-    (song: SongInRecordDTO) => {
+    (song: EachSongDTO) => {
       setQueue([song]);
       setQueueIndex(0);
       queueRef.current = [song];
@@ -188,7 +186,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const playQueue = React.useCallback(
-    (songs: SongInRecordDTO[], startIndex: number = 0) => {
+    (songs: EachSongDTO[], startIndex: number = 0) => {
       if (!songs.length || startIndex < 0 || startIndex >= songs.length) return;
       setQueue(songs);
       setQueueIndex(startIndex);

@@ -1,10 +1,10 @@
-export interface ApiResponse<T> {
+export interface ApiResponseDTO<T> {
   success: boolean;
   data: T;
   message: string;
 }
 
-export interface Page<T> {
+export interface PaginatedResponseDTO<T> {
   content: T[];
   page: number;
   size: number;

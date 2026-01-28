@@ -1,6 +1,6 @@
 import axios from "axios";
 import { toast } from "sonner";
-import { ApiResponse } from "../types/ApiResponse";
+import { ApiResponseDTO } from "../types/ApiResponse";
 import { AuthenticationResponseDTO } from "@/types/Auth";
 
 const api = axios.create({
@@ -40,8 +40,9 @@ api.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response as {
         status: number;
-        data: ApiResponse<any>;
+        data: ApiResponseDTO<any>;
       };
+
 
       const isAuthPage = window.location.pathname.startsWith("/auth");
 
@@ -100,8 +101,8 @@ api.interceptors.response.use(
             }
           }
         }
-      } else if (status === 500) {
-        toast.error(data?.message || "Internal server error. Try again later.");
+      } else if (status >= 400) {
+        toast.error(data?.message || "An error occurred. Please try again.");
       }
     } else {
       toast.error("Network error. Please check your connection.");

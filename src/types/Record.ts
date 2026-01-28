@@ -1,4 +1,5 @@
 import { ArtistPreviewDTO } from "./Artists";
+import { SongResponseDTO, UpsertSongDTO } from "./Song";
 
 export enum RecordType {
   ALBUM = "ALBUM",
@@ -12,37 +13,25 @@ export const RECORD_LIMITS = {
   ALBUM: Number.MAX_SAFE_INTEGER,
 };
 
-
-export interface TrackRecordInfo {
-  id: string;
-  title: string;
-}
-
 export interface RecordPreviewDTO {
   id: string;
   title: string;
-  coverUrl: string;
   releaseTimestamp: number;
+  coverUrl: string;
   recordType: RecordType;
   artists: ArtistPreviewDTO[];
 }
 
-export interface NewRecordDTO {
-  title: string;
-  releaseTimestamp: string;
-  recordType: RecordType;
-  artistIds: string[];
-}
-
-export interface NewRecordRequestDTO {
+export interface UpsertRecordDTO {
+  id?: string;
   title: string;
   releaseTimestamp: number;
   recordType: RecordType;
   artistIds: string[];
+  songs: UpsertSongDTO[];
 }
 
-export interface UpdateRecordDTO {
-  title: string;
-  releaseTimestamp: number;
-  artistIds: string[];
+export interface UpsertRecordResponseDTO {
+  id: string;
+  songs: SongResponseDTO[];
 }

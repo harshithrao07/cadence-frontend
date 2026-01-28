@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState } from "react";
 import api from "../lib/api";
-import { ApiResponse } from "@/types/ApiResponse";
+import { ApiResponseDTO } from "@/types/ApiResponse";
 import { RecordPreviewDTO } from "@/types/Record";
 
 type RecordContextType = {
@@ -51,7 +51,7 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setLoading(true);
     try {
-      const res = await api.get<ApiResponse<RecordPreviewDTO[]>>(
+      const res = await api.get<ApiResponseDTO<RecordPreviewDTO[]>>(
         "/api/v1/record/all",
         { params: { artistId } }
       );
@@ -83,12 +83,17 @@ export const RecordProvider: React.FC<{ children: React.ReactNode }> = ({
     // Note: The cache stores RecordPreviewDTO.
 
     try {
-      const res = await api.get<ApiResponse<RecordPreviewDTO>>(
+      const res = await api.get<ApiResponseDTO<any>>(
         `/api/v1/record/${recordId}`
       );
 
       if (res.data.success) {
-        return res.data.data;
+        const data = res.data.data;
+        // Map recordArtists to artists if present
+        if (data.recordArtists && !data.artists) {
+          data.artists = data.recordArtists;
+        }
+        return data as RecordPreviewDTO;
       }
     } catch (err) {
       console.error("Failed to fetch record:", err);

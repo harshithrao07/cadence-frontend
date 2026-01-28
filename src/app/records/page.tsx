@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRecords } from "../../context/RecordContext";
 import { useSongs } from "../../context/SongContext";
 import { RecordPreviewDTO, RecordType } from "../../types/Record";
-import { SongInRecordDTO } from "../../types/Song";
+import { EachSongDTO } from "../../types/Song";
 import { Clock, ArrowLeft } from "lucide-react";
 
 const formatDate = (timestamp: number) => {
@@ -19,7 +19,7 @@ const formatDate = (timestamp: number) => {
 
 interface RecordWithSongs {
   record: RecordPreviewDTO;
-  songs: SongInRecordDTO[];
+  songs: EachSongDTO[];
 }
 
 export default function RecordsPage() {

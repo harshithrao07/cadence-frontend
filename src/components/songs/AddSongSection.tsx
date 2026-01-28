@@ -7,12 +7,17 @@ import { SongFilePicker } from "./SongFIlePicker";
 import { RECORD_LIMITS } from "@/types/Record";
 import { toast } from "sonner";
 import { ArtistSelector } from "../artists/ArtistSelector";
-import { EachNewSongDTO, SongInRecordDTO } from "@/types/Song";
+import { UpsertSongDTO } from "@/types/Song";
 import { RecordType } from "@/types/Record";
 import { ArtistPreviewDTO } from "@/types/Artists";
 import { useGenres } from "@/context/GenreContext";
 import { usePlayer } from "@/context/PlayerContext";
-import api from "@/lib/api";
+
+export interface EditableSong extends UpsertSongDTO {
+  totalDuration: number;
+  order: number;
+  coverUrl: string;
+}
 
 const AddSongSection = ({
   selectedArtists = [],
@@ -22,14 +27,14 @@ const AddSongSection = ({
   onSongFilesChange,
   initialSongs = [],
   isUpdate = false,
-  fullExistingSongs = [], // Array of SongInRecordDTO objects for update mode
+  fullExistingSongs = [], // Array of EachSongDTO objects for update mode
 }) => {
   const recordArtistIds = React.useMemo(() => selectedArtists.map(a => a.id), [selectedArtists]);
 
-  const [songs, setSongs] = useState<EachNewSongDTO[]>(initialSongs);
+  const [songs, setSongs] = useState<EditableSong[]>(initialSongs);
   const [songFiles, setSongFiles] = useState<Map<string, File>>(new Map());
   const [currentFile, setCurrentFile] = useState<File | undefined>(undefined);
-  const [song, setSong] = useState<EachNewSongDTO>({
+  const [song, setSong] = useState<EditableSong>({
     title: "",
     genreIds: [],
     artistIds: [...recordArtistIds],
@@ -98,9 +103,11 @@ const AddSongSection = ({
     prevRecordArtistIdsRef.current = recordArtistIds;
   }, [recordArtistIds]);
 
+  const [deletedSongIds, setDeletedSongIds] = useState<string[]>([]);
+
   useEffect(() => {
-    onSongsChange?.(songs);
-  }, [songs]);
+    onSongsChange?.(songs, deletedSongIds);
+  }, [songs, deletedSongIds]);
 
   useEffect(() => {
     onSongFilesChange?.(songFiles);
@@ -277,8 +284,8 @@ const AddSongSection = ({
 
     setSongs((prev) => {
       const isEditingCurrent = editingSongIndex !== null;
-      const updatedSong = { ...song };
-      let newSongs: EachNewSongDTO[] = [];
+      const updatedSong = { ...song, title: trimmedTitle };
+      let newSongs: EditableSong[] = [];
 
       if (isEditingCurrent && editingSongIndex !== null) {
         newSongs = prev.map((s, idx) =>
@@ -302,6 +309,7 @@ const AddSongSection = ({
     const songToEdit = songs[index];
     setEditingSongIndex(index);
     setSong({
+      id: songToEdit.id,
       title: songToEdit.title,
       genreIds: [...songToEdit.genreIds],
       artistIds: [...songToEdit.artistIds],
@@ -338,21 +346,13 @@ const AddSongSection = ({
       resetForm();
     }
 
-    const songToRemove = songs[index] as EachNewSongDTO & { id?: string };
-
-    if (isUpdate && songToRemove?.id) {
-      try {
-        await api.delete(`/api/v1/song/delete/${songToRemove.id}`);
-        toast.success("Song deleted successfully");
-      } catch (error) {
-        console.error("Failed to delete song:", error);
-        toast.error("Failed to delete song. Please try again.");
-        return;
-      }
+    const songToRemove = songs[index] as EditableSong & { id?: string };
+    if (songToRemove.id) {
+      setDeletedSongIds(prev => [...prev, songToRemove.id!]);
     }
 
     setSongs((prev) => {
-      const target = prev[index] as EachNewSongDTO;
+      const target = prev[index];
 
       if (target) {
         setSongFiles((fileMap) => {
@@ -412,7 +412,7 @@ const AddSongSection = ({
     (editingSongIndex !== null || (!hasReachedLimit && currentFile)); // If adding, need file + limit check. If editing, file is optional (keep existing)
 
   const playFromAddSection = (songIndex: number) => {
-    const playableSongs: SongInRecordDTO[] = [];
+    const playableSongs: any[] = [];
     let targetIndexInQueue = 0;
 
     songs.forEach((s, idx) => {
@@ -423,7 +423,7 @@ const AddSongSection = ({
         .map(id => allEncounteredArtists.get(id))
         .filter(a => Boolean(a)) as ArtistPreviewDTO[];
 
-      const dto: SongInRecordDTO = {
+      const dto = {
         songId: `local-${idx}`,
         title: s.title,
         totalDuration: s.totalDuration,

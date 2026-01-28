@@ -1,23 +1,23 @@
-import { SongInRecordDTO } from "./Song";
+import { EachSongDTO } from "./Song";
 
 export interface PlayerState {
-  currentSong: SongInRecordDTO | null;
+  currentSong: EachSongDTO | null;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
   volume: number;
-  queue: SongInRecordDTO[];
+  queue: EachSongDTO[];
   queueIndex: number;
 }
 
 export interface PlayerContextType extends PlayerState {
-  playSong: (song: SongInRecordDTO) => void;
+  playSong: (song: EachSongDTO) => void;
   pauseSong: () => void;
   resumeSong: () => void;
   seekTo: (time: number) => void;
   setVolume: (volume: number) => void;
   togglePlay: () => void;
-  playQueue: (songs: SongInRecordDTO[], startIndex?: number) => void;
+  playQueue: (songs: EachSongDTO[], startIndex?: number) => void;
   playNext: () => void;
   playPrevious: () => void;
   resetPlayer: () => void;

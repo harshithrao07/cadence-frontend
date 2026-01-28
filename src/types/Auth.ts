@@ -2,7 +2,6 @@ export interface RegisterRequestDTO {
   name: string;
   email: string;
   password: string;
-  dateOfBirth?: Date;
 }
 
 export interface AuthenticationResponseDTO {

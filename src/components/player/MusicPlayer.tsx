@@ -285,7 +285,7 @@ export const MusicPlayer: React.FC = () => {
                 </div>
                 <button
                     onClick={() => setShowFullscreen(false)}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/40 hover:bg-black/60 transition"
+                    className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/40 hover:bg-black/60 transition"
                 >
                     <X className="w-5 h-5 text-gray-100" />
                 </button>

@@ -5,7 +5,6 @@ import Image from "next/image";
 import Input from "@/components/auth/Input";
 import { Button, Checkbox } from "@material-tailwind/react";
 import { CustomStepper } from "@/components/auth/CustomStepper";
-import DatePicker from "@/components/auth/DatePicker";
 import Link from "next/link";
 import { AuthenticationResponseDTO, RegisterRequestDTO } from "@/types/Auth";
 import api from "@/lib/api";
@@ -17,7 +16,6 @@ const Signup = () => {
     name: "",
     email: "",
     password: "",
-    dateOfBirth: null,
   });
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [activeStep, setActiveStep] = useState<number>(0);
@@ -28,7 +26,6 @@ const Signup = () => {
     false,
   ]);
   const router = useRouter();
-  const [dateOfBirth, setDateOfBirth] = useState(null);
 
   const passwordConditions = [
     "1 letter",
@@ -41,14 +38,8 @@ const Signup = () => {
     if (e) e.preventDefault();
     console.log("Submitting signup form:", signupBody);
     try {
-      setSignupBody((prev) => ({  
-        ...prev,
-        dateOfBirth: dateOfBirth,
-      }));
-
       const response = await api.post(`/auth/v1/register`, {
         ...signupBody,
-        dateOfBirth: dateOfBirth,
       });
 
       const authResponse: AuthenticationResponseDTO = response.data.data;
@@ -321,12 +312,6 @@ const Signup = () => {
                     handleToggle={handleToggle}
                     showPassword={false}
                   />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-sm text-gray-500 mb-2">
-                    Add your date of birth — optional.
-                  </label>
-                  <DatePicker setDateOfBirth={setDateOfBirth} />
                 </div>
               </div>
             )}

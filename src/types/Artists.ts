@@ -1,7 +1,8 @@
 import { RecordPreviewDTO } from "./Record";
-import { TrackPreviewDTO } from "./Song";
+import { TopSongsInArtistProfileDTO } from "./Song";
 
-export interface NewArtistDTO {
+export interface UpsertArtistDTO {
+  id?: string;
   name: string;
   description?: string;
 }
@@ -9,7 +10,7 @@ export interface NewArtistDTO {
 export interface ArtistPreviewDTO {
   id: string;
   name: string;
-  profileUrl?: string;
+  profileUrl: string;
 }
 
 export interface ArtistProfileDTO {
@@ -19,7 +20,7 @@ export interface ArtistProfileDTO {
   profileUrl: string;
   followers: number;
   monthlyListeners: number;
-  popularSongs: TrackPreviewDTO[];
+  popularSongs: TopSongsInArtistProfileDTO[];
   artistRecords: RecordPreviewDTO[];
 }
 

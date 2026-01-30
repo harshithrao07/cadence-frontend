@@ -1,6 +1,6 @@
 import { UserPreviewDTO } from "./User";
 
-enum PlaylistVisibility {
+export enum PlaylistVisibility {
     PUBLIC = "PUBLIC",
     PRIVATE = "PRIVATE",
 }
@@ -14,4 +14,10 @@ export interface PlaylistPreviewDTO {
     isSystem: boolean;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface UpsertPlaylistDTO {
+    id?: string;
+    name: string;
+    visibility?: PlaylistVisibility;
 }

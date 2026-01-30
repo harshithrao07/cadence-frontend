@@ -424,10 +424,14 @@ const AddSongSection = ({
         .filter(a => Boolean(a)) as ArtistPreviewDTO[];
 
       const dto = {
-        songId: `local-${idx}`,
+        id: `local-${idx}`,
         title: s.title,
         totalDuration: s.totalDuration,
-        coverUrl: s.coverUrl,
+        recordPreviewWithCoverImageDTO: {
+          id: "local-record",
+          title: recordTitle || "New Record",
+          coverUrl: s.coverUrl,
+        },
         createdBy: [],
         songUrl: "",
         order: s.order,

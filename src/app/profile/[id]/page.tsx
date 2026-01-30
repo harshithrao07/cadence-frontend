@@ -190,23 +190,26 @@ export default function UserProfilePage() {
                 {/* Created Playlists Preview */}
                 <Section title="Created Playlists" onSeeAll={() => setActiveTab("playlists")}>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                        {user.createdPlaylistsPreview.slice(0, 5).map((playlist) => (
-                             <PlaylistCard key={playlist.id} playlist={playlist} />
+                        {[...user.createdPlaylistsPreview]
+                            .sort((a, b) => (a.name === "Liked Songs" ? -1 : b.name === "Liked Songs" ? 1 : 0))
+                            .slice(0, 5)
+                            .map((playlist) => (
+                                <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
                         ))}
                         {user.createdPlaylistsPreview.length === 0 && <EmptyState message="No playlists created" />}
                     </div>
                 </Section>
-                
+
                  {/* Liked Playlists Preview */}
                  <Section title="Liked Playlists" onSeeAll={() => setActiveTab("playlists")}>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                         {user.likedPlaylistsPreview.slice(0, 5).map((playlist) => (
-                             <PlaylistCard key={playlist.id} playlist={playlist} />
+                             <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
                         ))}
                         {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
                     </div>
                 </Section>
-
+                
                 {/* Followed Artists Preview */}
                 <Section title="Following" onSeeAll={() => setActiveTab("artists")}>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -223,8 +226,10 @@ export default function UserProfilePage() {
             <div className="space-y-12">
                 <Section title="Created Playlists">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                        {user.createdPlaylistsPreview.map((playlist) => (
-                            <PlaylistCard key={playlist.id} playlist={playlist} />
+                        {[...user.createdPlaylistsPreview]
+                            .sort((a, b) => (a.name === "Liked Songs" ? -1 : b.name === "Liked Songs" ? 1 : 0))
+                            .map((playlist) => (
+                                <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
                         ))}
                         {user.createdPlaylistsPreview.length === 0 && <EmptyState message="No playlists created" />}
                     </div>
@@ -232,7 +237,7 @@ export default function UserProfilePage() {
                  <Section title="Liked Playlists">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                         {user.likedPlaylistsPreview.map((playlist) => (
-                            <PlaylistCard key={playlist.id} playlist={playlist} />
+                            <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
                         ))}
                          {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
                     </div>
@@ -376,23 +381,28 @@ const ArtistCard = ({ artist, onClick }: { artist: ArtistPreviewDTO; onClick: ()
   </div>
 );
 
-const PlaylistCard = ({ playlist }: { playlist: PlaylistPreviewDTO }) => (
-    <div className="group p-4 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 transition cursor-pointer flex flex-col gap-4">
-        <div className="relative aspect-square w-full rounded-md overflow-hidden shadow-lg bg-zinc-800">
-            {playlist.coverUrl ? (
-                <Image src={playlist.coverUrl} alt={playlist.name} fill className="object-cover group-hover:scale-105 transition duration-300" />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                    <Music className="w-12 h-12 text-zinc-600" />
-                </div>
-            )}
+const PlaylistCard = ({ playlist, onClick }: { playlist: PlaylistPreviewDTO; onClick: () => void }) => {
+    const isLikedSongs = playlist.name === "Liked Songs";
+    const coverUrl = isLikedSongs ? "/images/playlists/liked-songs.jpg" : playlist.coverUrl;
+
+    return (
+        <div onClick={onClick} className="group p-4 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 transition cursor-pointer flex flex-col gap-4">
+            <div className="relative aspect-square w-full rounded-md overflow-hidden shadow-lg bg-zinc-800">
+                {coverUrl ? (
+                    <Image src={coverUrl} alt={playlist.name} fill className="object-cover group-hover:scale-105 transition duration-300" />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <Music className="w-12 h-12 text-zinc-600" />
+                    </div>
+                )}
+            </div>
+            <div>
+                <div className="font-bold text-white truncate">{playlist.name}</div>
+                <div className="text-sm text-zinc-400 mt-1 line-clamp-2">By {playlist.owner.name}</div>
+            </div>
         </div>
-        <div>
-            <div className="font-bold text-white truncate">{playlist.name}</div>
-            <div className="text-sm text-zinc-400 mt-1 line-clamp-2">By {playlist.owner.name}</div>
-        </div>
-    </div>
-)
+    )
+}
 
 const EmptyState = ({ message }: { message: string }) => (
     <div className="col-span-full py-12 text-center text-zinc-500">

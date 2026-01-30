@@ -21,6 +21,8 @@ export default function Navbar() {
     }
   }, [pathname]);
 
+  if (pathname.startsWith("/auth")) return null;
+
   return (
     <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-black/80 backdrop-blur">
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">

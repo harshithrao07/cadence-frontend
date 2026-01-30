@@ -1,5 +1,6 @@
 import { ArtistPreviewDTO } from "./Artists";
 import { GenrePreviewDTO } from "./Genre";
+import { RecordPreviewWithCoverImageDTO } from "./Record";
 
 export interface EachSongDTO {
   id: string;
@@ -7,7 +8,7 @@ export interface EachSongDTO {
   totalDuration: number;
   artists: ArtistPreviewDTO[];
   genres: GenrePreviewDTO[];
-  recordId: string;
+  recordPreviewWithCoverImageDTO: RecordPreviewWithCoverImageDTO;
 }
 
 export interface UpsertSongDTO {

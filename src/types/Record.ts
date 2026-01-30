@@ -35,3 +35,9 @@ export interface UpsertRecordResponseDTO {
   id: string;
   songs: SongResponseDTO[];
 }
+
+export interface RecordPreviewWithCoverImageDTO {
+  id: string;
+  title: string;
+  coverUrl: string;
+}

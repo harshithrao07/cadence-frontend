@@ -13,15 +13,12 @@ import { useEffect, useState } from "react";
 import AddRecordPage from "../add/page";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import SongOptionsMenu from "@/components/songs/SongOptionsMenu";
 
 const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-
-  if (mins === 0 && secs === 0) return "0 seconds";
-  if (mins === 0) return `${secs} second${secs !== 1 ? 's' : ''}`;
-  if (secs === 0) return `${mins} minute${mins !== 1 ? 's' : ''}`;
-  return `${mins} minute${mins !== 1 ? 's' : ''} ${secs} second${secs !== 1 ? 's' : ''}`;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
 const formatDate = (timestamp: number) => {
@@ -38,9 +35,8 @@ export default function RecordPage() {
   const { getRecordById } = useRecords();
   const { fetchSongsByRecordId } = useSongs();
   const { playSong, playQueue, currentSong, isPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
-  const { isAdmin } = useUser();
+  const { isAdmin, likedSongIds, toggleLike } = useUser();
   const [liked, setLiked] = useState(false);
-  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
   const [songs, setSongs] = useState<EachSongDTO[]>([]);
   const [record, setRecord] = useState<RecordPreviewDTO>({
     id: "",
@@ -77,15 +73,8 @@ export default function RecordPage() {
     (acc, song) => acc + song.totalDuration,
     0
   );
-  const totalMinutes = Math.floor(totalDuration / 60);
-  const totalSeconds = totalDuration % 60;
-
-  const formattedTotalDuration = (() => {
-    if (totalMinutes === 0 && totalSeconds === 0) return "0 seconds";
-    if (totalMinutes === 0) return `${totalSeconds} second${totalSeconds !== 1 ? 's' : ''}`;
-    if (totalSeconds === 0) return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}`;
-    return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''} ${totalSeconds} second${totalSeconds !== 1 ? 's' : ''}`;
-  })();
+  
+  const formattedTotalDuration = formatDuration(totalDuration);
 
   const handlePlaySong = (song: EachSongDTO) => {
     if (currentSong?.id === song.id) {
@@ -117,34 +106,30 @@ export default function RecordPage() {
     return currentSong?.id === songId && isPlaying;
   };
 
-  const toggleLikeSong = (e: React.MouseEvent, songId: string) => {
-    e.stopPropagation();
-    const newLiked = new Set(likedSongs);
-    if (newLiked.has(songId)) {
-      newLiked.delete(songId);
-    } else {
-      newLiked.add(songId);
-    }
-    setLikedSongs(newLiked);
-  };
-
-  const handleDeleteRecord = async () => {
+  const handleDeleteRecord = () => {
     const recordIdParam = Array.isArray(id) ? id[0] : id;
     if (!recordIdParam) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this record? This action cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      await api.delete(`/api/v1/record/delete/${recordIdParam}`);
-      toast.success("Record deleted successfully");
-      router.push("/records");
-    } catch (error) {
-      console.error("Failed to delete record:", error);
-      toast.error("Failed to delete record. Please try again.");
-    }
+    toast("Are you sure you want to delete this record?", {
+      description: "This action cannot be undone.",
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            await api.delete(`/api/v1/record/delete/${recordIdParam}`);
+            toast.success("Record deleted successfully");
+            router.push("/");
+          } catch (error) {
+            console.error("Failed to delete record:", error);
+            toast.error("Failed to delete record. Please try again.");
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
   };
 
   return (
@@ -287,19 +272,20 @@ export default function RecordPage() {
 
       {/* Song List */}
       <div className="px-6 pb-12">
-        <div className="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-2 text-sm text-gray-400 border-b border-gray-800 mb-2">
+        <div className="grid grid-cols-[16px_1fr_auto_auto_auto] gap-4 px-4 py-2 text-sm text-gray-400 border-b border-gray-800 mb-2">
           <div>#</div>
           <div>Title</div>
           <div></div>
           <div className="flex justify-end">
             <Clock className="w-4 h-4" />
           </div>
+          <div></div>
         </div>
 
         {songs.map((song, index) => (
           <div
             key={song.id}
-            className="grid grid-cols-[16px_1fr_auto_auto] gap-4 px-4 py-3 rounded hover:bg-white/10 group cursor-pointer transition"
+            className="grid grid-cols-[16px_1fr_auto_auto_auto] gap-4 px-4 py-3 rounded hover:bg-white/10 group cursor-pointer transition"
             onClick={() => handlePlaySong(song)}
           >
             <div className="flex items-center justify-center text-gray-400 group-hover:text-white">
@@ -361,20 +347,23 @@ export default function RecordPage() {
             </div>
             <div className="flex items-center justify-center">
               <button
-                onClick={(e) => toggleLikeSong(e, song.id)}
-                className="opacity-0 group-hover:opacity-100 transition hover:scale-110"
+                onClick={(e) => toggleLike(song.id, e)}
+                className={`transition hover:scale-110 ${likedSongIds.has(song.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
               >
                 <Heart
-                  className={`w-5 h-5 ${likedSongs.has(song.id)
+                  className={`w-5 h-5 ${likedSongIds.has(song.id)
                     ? "fill-red-500 text-red-500 opacity-100"
                     : "text-gray-400 hover:text-white"
                     }`}
-                  style={likedSongs.has(song.id) ? { opacity: 1 } : {}}
+                  style={likedSongIds.has(song.id) ? { opacity: 1 } : {}}
                 />
               </button>
             </div>
             <div className="flex items-center justify-end text-gray-400 text-sm">
               {formatDuration(song.totalDuration)}
+            </div>
+            <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
+              <SongOptionsMenu songId={song.id} />
             </div>
           </div>
         ))}

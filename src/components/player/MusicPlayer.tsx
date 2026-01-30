@@ -2,6 +2,7 @@
 
 import React from "react";
 import { usePlayer } from "@/context/PlayerContext";
+import { useUser } from "@/context/UserContext";
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize2, ListMusic, Heart, X } from "lucide-react";
 import Image from "next/image";
 
@@ -28,11 +29,12 @@ export const MusicPlayer: React.FC = () => {
         playPrevious,
         playQueue
     } = usePlayer();
+    
+    const { likedSongIds, toggleLike } = useUser();
 
     const [showQueue, setShowQueue] = React.useState(false);
     const [showFullscreen, setShowFullscreen] = React.useState(false);
     const [previousVolume, setPreviousVolume] = React.useState<number | null>(null);
-    const [isLiked, setIsLiked] = React.useState(false);
 
     const isMuted = volume === 0;
     const progress = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
@@ -87,7 +89,7 @@ export const MusicPlayer: React.FC = () => {
             <div className="flex items-center gap-4 w-[30%]">
                 <div className="relative w-14 h-14 flex-shrink-0">
                     <Image
-                        src={currentSong.coverUrl || "/images/records/record-placeholder.png"}
+                        src={currentSong.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
                         alt={currentSong.title}
                         fill
                         className="rounded shadow-lg object-cover"
@@ -150,10 +152,10 @@ export const MusicPlayer: React.FC = () => {
 
             <div className="flex items-center justify-end gap-3 w-[30%]">
                 <button
-                    onClick={() => setIsLiked(v => !v)}
+                    onClick={(e) => toggleLike(currentSong.id, e)}
                     className="p-1 rounded-full hover:bg-zinc-800 transition"
                 >
-                    <Heart className={`w-5 h-5 ${isLiked ? "text-red-500 fill-red-500" : "text-gray-400 hover:text-white"}`} />
+                    <Heart className={`w-5 h-5 ${likedSongIds.has(currentSong.id) ? "text-red-500 fill-red-500" : "text-gray-400 hover:text-white"}`} />
                 </button>
                 <button
                     onClick={() => setShowQueue(v => !v)}
@@ -213,7 +215,7 @@ export const MusicPlayer: React.FC = () => {
                         >
                             <div className="w-11 h-11 relative flex-shrink-0 rounded-md overflow-hidden bg-zinc-900">
                                 <Image
-                                    src={nowPlayingSong.coverUrl || "/images/records/record-placeholder.png"}
+                                    src={nowPlayingSong.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
                                     alt={nowPlayingSong.title}
                                     fill
                                     className="object-cover"
@@ -240,13 +242,13 @@ export const MusicPlayer: React.FC = () => {
                                     const absoluteIndex = (currentIndex ?? 0) + 1 + idx;
                                     return (
                                         <button
-                                            key={song.songId + absoluteIndex}
+                                            key={song.id + absoluteIndex}
                                             onClick={() => playQueue(queue, absoluteIndex)}
                                             className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-zinc-900 text-left transition"
                                         >
                                             <div className="w-9 h-9 relative flex-shrink-0 rounded-md overflow-hidden bg-zinc-900">
                                                 <Image
-                                                    src={song.coverUrl || "/images/records/record-placeholder.png"}
+                                                    src={song.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
                                                     alt={song.title}
                                                     fill
                                                     className="object-cover"
@@ -276,7 +278,7 @@ export const MusicPlayer: React.FC = () => {
             <div className="fixed inset-0 z-50 overflow-hidden">
                 <div className="absolute inset-0">
                     <Image
-                        src={currentSong.coverUrl || "/images/records/record-placeholder.png"}
+                        src={currentSong.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
                         alt={currentSong.title}
                         fill
                         className="object-cover blur-3xl scale-110 opacity-60"
@@ -292,7 +294,7 @@ export const MusicPlayer: React.FC = () => {
                 <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
                     <div className="w-64 h-64 sm:w-80 sm:h-80 md:w-[22rem] md:h-[22rem] lg:w-[26rem] lg:h-[26rem] relative rounded-3xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.8)] border border-white/10 bg-black/40">
                         <Image
-                            src={currentSong.coverUrl || "/images/records/record-placeholder.png"}
+                            src={currentSong.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
                             alt={currentSong.title}
                             fill
                             className="object-cover"

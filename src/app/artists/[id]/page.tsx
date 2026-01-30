@@ -27,12 +27,12 @@ import { EachSongDTO, TopSongsInArtistProfileDTO } from "@/types/Song";
 import { toast } from "sonner";
 import AddArtist from "../../../components/artists/AddArtist";
 import { UserPreviewDTO } from "@/types/User";
+import SongOptionsMenu from "@/components/songs/SongOptionsMenu";
 
 export default function ArtistProfile() {
   const { getArtistById, refreshArtists } = useArtists();
-  const { isAdmin } = useUser();
+  const { isAdmin, likedSongIds, toggleLike } = useUser();
   const { playSong, playQueue, currentSong, isPlaying: isGlobalPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
-  const [likedSongs, setLikedSongs] = useState(new Set());
   const { id } = useParams();
   const [artist, setArtist] = useState<ArtistProfileDTO>({
     id: "",
@@ -95,18 +95,6 @@ export default function ArtistProfile() {
     fetchArtistData(artistId);
     checkIsFollowing(artistId);
   }, [id]);
-
-  const toggleLike = (id) => {
-    setLikedSongs((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
 
   const handleFollowToggle = async () => {
     const artistIdParam = Array.isArray(id) ? id[0] : id;
@@ -185,7 +173,11 @@ export default function ArtistProfile() {
       totalDuration: t.totalDuration,
       artists: t.artists,
       genres: [],
-      recordId: t.recordId,
+      recordPreviewWithCoverImageDTO: {
+        id: t.recordId,
+        title: t.recordTitle,
+        coverUrl: t.coverUrl,
+      },
     }));
 
     const startIndex = queueSongs.findIndex(s => s.id === track.id);
@@ -196,7 +188,11 @@ export default function ArtistProfile() {
         totalDuration: track.totalDuration,
         artists: track.artists,
         genres: [],
-        recordId: track.recordId,
+        recordPreviewWithCoverImageDTO: {
+          id: track.recordId,
+          title: track.recordTitle,
+          coverUrl: track.coverUrl,
+        },
       };
       playSong(songToPlay);
       return;
@@ -400,7 +396,7 @@ export default function ArtistProfile() {
             {popularSongs.map((track, index) => (
               <div
                 key={track.id}
-                className="grid grid-cols-[auto_auto_1fr_auto] gap-4 items-center p-2 rounded hover:bg-white/10 group transition"
+                className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-4 items-center p-2 rounded hover:bg-white/10 group transition"
               >
                 <div className="w-8 text-gray-400 group-hover:hidden text-center flex items-center justify-center">
                   {isCurrentSongPlaying(track.id) ? (
@@ -459,19 +455,22 @@ export default function ArtistProfile() {
                 </div>
                 <div className="flex items-center gap-4 justify-end">
                   <button
-                    onClick={() => toggleLike(track.id)}
-                    className="opacity-0 group-hover:opacity-100 transition"
-                  >
-                    <Heart
-                      className={`w-5 h-5 ${likedSongs.has(track.id)
-                        ? "fill-red-500 text-red-500"
-                        : "text-gray-400"
-                        }`}
-                    />
-                  </button>
+                  onClick={(e) => toggleLike(track.id, e)}
+                  className={`transition ${likedSongIds.has(track.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                >
+                  <Heart
+                    className={`w-5 h-5 ${likedSongIds.has(track.id)
+                      ? "fill-red-500 text-red-500"
+                      : "text-gray-400"
+                      }`}
+                  />
+                </button>
                   <div className="text-sm text-gray-400 w-16 text-right">
                     {formatDuration(track.totalDuration)}
                   </div>
+                </div>
+                <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
+                  <SongOptionsMenu songId={track.id} />
                 </div>
               </div>
             ))}

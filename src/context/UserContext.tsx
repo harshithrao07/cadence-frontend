@@ -2,12 +2,18 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import api from "../lib/api";
-import { ApiResponse } from "@/types/ApiResponse";
+import { toast } from "sonner";
+import { EachSongDTO } from "@/types/Song";
+import { ApiResponseDTO } from "@/types/ApiResponse";
 
 type UserContextType = {
   isAdmin: boolean | null;
   loading: boolean;
+  likedSongsLoading: boolean;
+  likedSongIds: Set<string>;
   checkIsAdmin: () => Promise<boolean | null>;
+  fetchLikedSongs: () => Promise<void>;
+  toggleLike: (songId: string, e?: React.MouseEvent) => Promise<void>;
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -25,9 +31,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+  const [likedSongsLoading, setLikedSongsLoading] = useState(true);
+  const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     checkIsAdmin();
+    fetchLikedSongs();
   }, []);
 
   const checkIsAdmin = async (): Promise<boolean | null> => {
@@ -46,12 +55,91 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return null;
   };
 
+  const fetchLikedSongs = async () => {
+    try {
+      setLikedSongsLoading(true);
+      const authDetails = localStorage.getItem("auth_details");
+      if (!authDetails) {
+        setLikedSongsLoading(false);
+        return;
+      }
+      
+      const user = JSON.parse(authDetails);
+      if (!user || !user.id) {
+        setLikedSongsLoading(false);
+        return;
+      }
+
+      const playlistId = `LIKED_SONGS_${user.id}`;
+      const res = await api.get<ApiResponseDTO<EachSongDTO[]>>(`/api/v1/playlist/${playlistId}/songs`);
+      
+      if (res.data.success) {
+        const ids = new Set(res.data.data.map(song => song.id));
+        setLikedSongIds(ids);
+      }
+    } catch (error) {
+      console.error("Failed to fetch liked songs:", error);
+    } finally {
+      setLikedSongsLoading(false);
+    }
+  };
+
+  const toggleLike = async (songId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const isLiking = !likedSongIds.has(songId);
+    
+    // Optimistic update
+    setLikedSongIds(prev => {
+      const next = new Set(prev);
+      if (isLiking) next.add(songId);
+      else next.delete(songId);
+      return next;
+    });
+
+    try {
+      const authDetails = localStorage.getItem("auth_details");
+      if (!authDetails) return;
+      
+      const user = JSON.parse(authDetails);
+      if (!user || !user.id) return;
+
+      const playlistId = `LIKED_SONGS_${user.id}`;
+
+      if (isLiking) {
+        await api.put(`/api/v1/playlist/${playlistId}/song/${songId}`);
+        toast.success("Added to Liked Songs");
+      } else {
+        // Try to remove - assuming DELETE endpoint exists or similar
+        // If DELETE is not supported, we might need another way or just accept it's only adding for now.
+        // Based on typical REST patterns:
+        await api.delete(`/api/v1/playlist/${playlistId}/song/${songId}`);
+        toast.success("Removed from Liked Songs");
+      }
+    } catch (error) {
+      console.error("Failed to toggle like:", error);
+      toast.error(isLiking ? "Failed to add to Liked Songs" : "Failed to remove from Liked Songs");
+      
+      // Revert optimistic update
+      setLikedSongIds(prev => {
+        const next = new Set(prev);
+        if (isLiking) next.delete(songId);
+        else next.add(songId);
+        return next;
+      });
+    }
+  };
+
   return (
     <UserContext.Provider
       value={{
         isAdmin,
         loading,
+        likedSongsLoading,
+        likedSongIds,
         checkIsAdmin,
+        fetchLikedSongs,
+        toggleLike,
       }}
     >
       {children}

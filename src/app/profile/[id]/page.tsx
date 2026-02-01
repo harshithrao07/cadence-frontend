@@ -128,11 +128,11 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-black to-black text-white pb-24">
+    <div className="min-h-screen text-white pb-24">
       {/* Header */}
-      <div className="bg-gradient-to-b from-red-900/50 to-black pt-20 pb-8 px-6 sm:px-12">
+      <div className="pt-20 pb-8 px-6 sm:px-12">
         <div className="flex flex-col md:flex-row items-center md:items-end gap-8">
-            <div className="relative w-40 h-40 sm:w-52 sm:h-52 shadow-2xl rounded-full overflow-hidden border-4 border-black/50">
+            <div className="relative w-40 h-40 sm:w-52 sm:h-52 shadow-2xl rounded-full overflow-hidden border-2 border-white">
             {user.profileUrl ? (
                 <Image
                 src={user.profileUrl}
@@ -141,8 +141,10 @@ export default function UserProfilePage() {
                 className="object-cover"
                 />
             ) : (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                <User className="w-20 h-20 text-zinc-500" />
+                <div className="w-full h-full bg-black flex items-center justify-center">
+                  <span className="text-6xl sm:text-7xl font-bold text-zinc-500">
+                    {user.name.charAt(0).toUpperCase()}
+                  </span>
                 </div>
             )}
             </div>
@@ -175,7 +177,7 @@ export default function UserProfilePage() {
       </div>
 
       {/* Navigation */}
-      <div className="sticky top-0 z-10 bg-black/95 backdrop-blur-md border-b border-white/10 px-6 sm:px-12">
+      <div className="sticky top-0 z-10 backdrop-blur-md px-6 sm:px-12">
         <div className="flex items-center gap-8 overflow-x-auto no-scrollbar py-4">
           <TabButton active={activeTab === "overview"} onClick={() => setActiveTab("overview")} label="Overview" />
           <TabButton active={activeTab === "playlists"} onClick={() => setActiveTab("playlists")} label="Playlists" />
@@ -393,6 +395,11 @@ const PlaylistCard = ({ playlist, onClick }: { playlist: PlaylistPreviewDTO; onC
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
                         <Music className="w-12 h-12 text-zinc-600" />
+                    </div>
+                )}
+                {playlist.visibility && (
+                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-wider font-bold z-10">
+                        {playlist.visibility}
                     </div>
                 )}
             </div>

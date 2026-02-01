@@ -30,11 +30,21 @@ export default function RootLayout({ children }) {
               <RecordProvider>
                 <SongProvider>
                   <PlayerProvider>
-                    <div className="min-h-screen flex flex-col bg-black">
+                    <div className="min-h-screen flex flex-col bg-black bg-gradient-to-b from-red-900/50 via-black to-black">
                       <Navbar />
                       <main className="flex-1 pb-24">{children}</main>
                       <MusicPlayer />
-                      <Toaster richColors position="top-right" />
+                      <Toaster
+                        richColors
+                        position="top-right"
+                        closeButton
+                        toastOptions={{
+                          classNames: {
+                            toast: "!p-5",
+                            closeButton: "!left-auto !right-1 !top-1 !transform-none !border-none !bg-transparent hover:!bg-white/10",
+                          },
+                        }}
+                      />
                     </div>
                   </PlayerProvider>
                 </SongProvider>

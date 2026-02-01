@@ -111,7 +111,7 @@ export default function RecordsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-red-900 via-black to-black text-white">
+    <div className="min-h-screen text-white">
       {/* Header */}
       <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">

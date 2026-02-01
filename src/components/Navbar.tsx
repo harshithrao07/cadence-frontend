@@ -2,12 +2,25 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { User, Music2 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { User, Music2, LogOut, Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
+import GlobalSearch from "./search/GlobalSearch";
 
 export default function Navbar() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 0);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     const authDetails = localStorage.getItem("auth_details");
@@ -21,10 +34,34 @@ export default function Navbar() {
     }
   }, [pathname]);
 
+  const handleLogout = () => {
+    toast("Are you sure you want to logout?", {
+      action: {
+        label: "Logout",
+        onClick: () => {
+          localStorage.removeItem("auth_details");
+          setUserId(null);
+          router.push("/auth/login");
+          toast.success("Logged out successfully");
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
+  };
+
   if (pathname.startsWith("/auth")) return null;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-black/80 backdrop-blur">
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isScrolled
+          ? "bg-black/90 backdrop-blur-md border-b border-zinc-800"
+          : "bg-transparent border-b border-transparent"
+      }`}
+    >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
         <Link
           href="/"
@@ -33,18 +70,43 @@ export default function Navbar() {
           <Music2 className="w-6 h-6 text-red-500" />
           <span className="text-white">Cadence</span>
         </Link>
+
+        {/* Search Bar */}
+        <div className="flex-1 max-w-md mx-6 hidden sm:block">
+            <div 
+                onClick={() => setIsSearchOpen(true)}
+                className="relative group cursor-text"
+            >
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-zinc-400 group-hover:text-white transition" />
+                </div>
+                <div className="w-full bg-zinc-900 border border-zinc-800 text-zinc-400 text-sm rounded-full py-2 pl-10 pr-4 group-hover:bg-zinc-800 group-hover:text-zinc-300 transition">
+                    Search songs, artists, records...
+                </div>
+            </div>
+        </div>
+
         <div className="flex items-center gap-6 text-sm text-zinc-300">
           <Link href="/artists" className="hover:text-white transition">
             Artists
           </Link>
           {userId ? (
-            <Link
-              href={`/profile/${userId}`}
-              className="hover:text-white transition flex items-center gap-2"
-            >
-              <User className="w-4 h-4" />
-              Profile
-            </Link>
+            <>
+              <Link
+                href={`/profile/${userId}`}
+                className="hover:text-white transition flex items-center gap-2"
+              >
+                <User className="w-4 h-4" />
+                Profile
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="hover:text-white transition flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </>
           ) : (
             <Link
               href="/auth/login"
@@ -56,6 +118,7 @@ export default function Navbar() {
           )}
         </div>
       </div>
+      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </nav>
   );
 }

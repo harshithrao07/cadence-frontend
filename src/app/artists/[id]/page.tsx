@@ -249,9 +249,9 @@ export default function ArtistProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen text-white">
       {/* Hero Section */}
-      <div className="relative h-96 bg-gradient-to-b from-red-500 to-black">
+      <div className="relative h-96">
         <div className="absolute inset-0 flex items-end p-8">
           {artist.profileUrl && (
             <Image
@@ -293,7 +293,7 @@ export default function ArtistProfile() {
       </div>
 
       {/* Controls */}
-      <div className="bg-black p-8">
+      <div className="p-8">
         <div className="flex items-center justify-between mb-8">
           {/* Left controls */}
           <div className="flex items-center gap-6">

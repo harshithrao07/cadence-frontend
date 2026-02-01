@@ -44,7 +44,7 @@ export default function RecordPage() {
     coverUrl: "",
     releaseTimestamp: Date.now(),
     recordType: RecordType.ALBUM,
-    artists: [],
+    recordArtists: [],
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -133,7 +133,7 @@ export default function RecordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-red-900 via-black to-black text-white">
+    <div className="min-h-screen text-white">
       {/* Header */}
       <div className="px-6 pt-16 pb-6 flex flex-col md:flex-row gap-6 items-end">
         <Image
@@ -173,8 +173,8 @@ export default function RecordPage() {
           )}
           <div className="flex items-center gap-2 text-sm">
             <div className="font-medium flex flex-wrap gap-1">
-              {record.artists?.length > 0 ? (
-                record.artists.map((artist, index) => (
+              {record.recordArtists?.length > 0 ? (
+                record.recordArtists.map((artist, index) => (
                   <span key={artist.id}>
                     <button
                       onClick={() => router.push(`/artists/${artist.id}`)}
@@ -182,7 +182,7 @@ export default function RecordPage() {
                     >
                       {artist.name}
                     </button>
-                    {index < record.artists.length - 1 && ", "}
+                    {index < record.recordArtists.length - 1 && ", "}
                   </span>
                 ))
               ) : (
@@ -200,7 +200,7 @@ export default function RecordPage() {
       </div>
 
       {/* Controls */}
-      <div className="px-6 py-6 bg-black">
+      <div className="px-6 py-6">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
@@ -222,17 +222,6 @@ export default function RecordPage() {
             title="Shuffle"
           >
             <Shuffle className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setLiked(!liked)}
-            className="w-10 h-10 flex items-center justify-center transition hover:scale-110"
-          >
-            <Heart
-              className={`w-8 h-8 ${liked
-                ? "fill-red-500 text-red-500"
-                : "text-gray-400 hover:text-white"
-                }`}
-            />
           </button>
           {isAdmin && (
             <div className="relative">

@@ -28,8 +28,8 @@ export default function ArtistsPage() {
   }, [searchQuery]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-black to-black text-white">
-      <header className="relative bg-gradient-to-b from-red-500 to-black px-8 pt-16 pb-24">
+    <div className="min-h-screen text-white">
+      <header className="relative px-8 pt-16 pb-24">
         <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent pointer-events-none" />
         <div className="relative">
           <div className="flex items-center gap-3 mb-6">

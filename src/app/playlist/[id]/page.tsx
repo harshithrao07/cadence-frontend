@@ -23,7 +23,7 @@ export default function PlaylistPage() {
   const { id } = useParams();
   const router = useRouter();
   const { playSong, playQueue, currentSong, isPlaying, togglePlay: toggleGlobalPlay } = usePlayer();
-  const { likedSongIds, toggleLike, likedSongsLoading } = useUser();
+  const { likedSongIds, toggleLike, likedSongsLoading, likedPlaylistIds, togglePlaylistLike } = useUser();
   const [songs, setSongs] = useState<EachSongDTO[]>([]);
   const [playlist, setPlaylist] = useState<PlaylistPreviewDTO | null>(null);
   const [loading, setLoading] = useState(true);
@@ -191,7 +191,7 @@ export default function PlaylistPage() {
   const formattedTotalDuration = `${totalMinutes} min ${totalSeconds} sec`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-900 via-black to-black text-white">
+    <div className="min-h-screen text-white">
       {/* Header */}
       <div className="px-6 pt-16 pb-6 flex flex-col md:flex-row gap-6 items-end">
         <div className="w-56 h-56 relative shadow-2xl flex-shrink-0 bg-zinc-800 flex items-center justify-center rounded-lg overflow-hidden">
@@ -227,7 +227,9 @@ export default function PlaylistPage() {
                   </div>
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-zinc-400" />
+                    <span className="text-xs font-bold text-white">
+                      {playlist.owner.name.charAt(0).toUpperCase()}
+                    </span>
                   </div>
                 )}
                 <span className="font-bold text-white hover:underline cursor-pointer" onClick={() => router.push(`/profile/${playlist.owner.id}`)}>
@@ -237,10 +239,10 @@ export default function PlaylistPage() {
             )}
             <span>•</span>
             <span>{songs.length} songs, {formattedTotalDuration}</span>
-            {playlist.visibility === PlaylistVisibility.PRIVATE && (
+            {playlist.visibility && (
               <>
                 <span>•</span>
-                <span className="bg-zinc-800 text-xs px-2 py-0.5 rounded-full border border-zinc-700">Private</span>
+                <span className="bg-zinc-800 text-xs px-2 py-0.5 rounded-full border border-zinc-700">{playlist.visibility}</span>
               </>
             )}
           </div>
@@ -248,7 +250,7 @@ export default function PlaylistPage() {
       </div>
 
       {/* Controls */}
-      <div className="px-6 py-6 bg-black/20 backdrop-blur-sm sticky top-0 z-10">
+      <div className="px-6 py-6 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
@@ -277,6 +279,20 @@ export default function PlaylistPage() {
           >
             <Shuffle className="w-5 h-5" />
           </button>
+
+          {currentUserId && playlist.owner.id !== currentUserId && (
+            <button
+              onClick={() => togglePlaylistLike(playlist.id)}
+              className={`w-10 h-10 border rounded-full flex items-center justify-center transition ${
+                likedPlaylistIds.has(playlist.id)
+                  ? "border-red-500 text-red-500"
+                  : "border-zinc-600 text-zinc-400 hover:border-white hover:text-white"
+              }`}
+              title={likedPlaylistIds.has(playlist.id) ? "Remove from Library" : "Save to Library"}
+            >
+              <Heart className={`w-5 h-5 ${likedPlaylistIds.has(playlist.id) ? "fill-red-500" : ""}`} />
+            </button>
+          )}
           
           {currentUserId && playlist.owner.id === currentUserId && playlist.name !== "Liked Songs" && (
             <button

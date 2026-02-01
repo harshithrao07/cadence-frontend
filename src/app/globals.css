@@ -19,3 +19,13 @@ input:-webkit-autofill:active {
   background-color: transparent !important;
   transition: background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;
 }
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

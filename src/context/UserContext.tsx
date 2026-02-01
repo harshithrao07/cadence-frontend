@@ -5,15 +5,19 @@ import api from "../lib/api";
 import { toast } from "sonner";
 import { EachSongDTO } from "@/types/Song";
 import { ApiResponseDTO } from "@/types/ApiResponse";
+import { UserProfileDTO } from "@/types/User";
 
 type UserContextType = {
   isAdmin: boolean | null;
   loading: boolean;
   likedSongsLoading: boolean;
   likedSongIds: Set<string>;
+  likedPlaylistIds: Set<string>;
   checkIsAdmin: () => Promise<boolean | null>;
   fetchLikedSongs: () => Promise<void>;
+  fetchLikedPlaylists: () => Promise<void>;
   toggleLike: (songId: string, e?: React.MouseEvent) => Promise<void>;
+  togglePlaylistLike: (playlistId: string) => Promise<void>;
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -33,10 +37,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(false);
   const [likedSongsLoading, setLikedSongsLoading] = useState(true);
   const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
+  const [likedPlaylistIds, setLikedPlaylistIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     checkIsAdmin();
     fetchLikedSongs();
+    fetchLikedPlaylists();
   }, []);
 
   const checkIsAdmin = async (): Promise<boolean | null> => {
@@ -81,6 +87,58 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Failed to fetch liked songs:", error);
     } finally {
       setLikedSongsLoading(false);
+    }
+  };
+
+  const fetchLikedPlaylists = async () => {
+    try {
+      const authDetails = localStorage.getItem("auth_details");
+      if (!authDetails) return;
+      
+      const user = JSON.parse(authDetails);
+      if (!user || !user.id) return;
+
+      const res = await api.get<ApiResponseDTO<UserProfileDTO>>(`/api/v1/user/${user.id}`);
+      
+      if (res.data.success) {
+        const ids = new Set(res.data.data.likedPlaylistsPreview.map(playlist => playlist.id));
+        setLikedPlaylistIds(ids);
+      }
+    } catch (error) {
+      console.error("Failed to fetch liked playlists:", error);
+    }
+  };
+
+  const togglePlaylistLike = async (playlistId: string) => {
+    const isLiking = !likedPlaylistIds.has(playlistId);
+    
+    // Optimistic update
+    setLikedPlaylistIds(prev => {
+      const next = new Set(prev);
+      if (isLiking) next.add(playlistId);
+      else next.delete(playlistId);
+      return next;
+    });
+
+    try {
+      if (isLiking) {
+        await api.put(`/api/v1/playlist/${playlistId}/like`);
+        toast.success("Added to Liked Playlists");
+      } else {
+        await api.delete(`/api/v1/playlist/${playlistId}/like`);
+        toast.success("Removed from Liked Playlists");
+      }
+    } catch (error) {
+      console.error("Failed to toggle playlist like:", error);
+      toast.error(isLiking ? "Failed to like playlist" : "Failed to unlike playlist");
+      
+      // Revert optimistic update
+      setLikedPlaylistIds(prev => {
+        const next = new Set(prev);
+        if (isLiking) next.delete(playlistId);
+        else next.add(playlistId);
+        return next;
+      });
     }
   };
 
@@ -137,9 +195,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         loading,
         likedSongsLoading,
         likedSongIds,
+        likedPlaylistIds,
         checkIsAdmin,
         fetchLikedSongs,
+        fetchLikedPlaylists,
         toggleLike,
+        togglePlaylistLike,
       }}
     >
       {children}

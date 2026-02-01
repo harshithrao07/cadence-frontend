@@ -19,7 +19,7 @@ export interface RecordPreviewDTO {
   releaseTimestamp: number;
   coverUrl: string;
   recordType: RecordType;
-  artists: ArtistPreviewDTO[];
+  recordArtists: ArtistPreviewDTO[];
 }
 
 export interface UpsertRecordDTO {

@@ -48,7 +48,7 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
     title: existingRecord?.title || "",
     releaseTimestamp: existingRecord ? new Date(existingRecord.releaseTimestamp).toISOString().split('T')[0] : "",
     recordType: existingRecord?.recordType || null,
-    artistIds: isUpdate && existingRecord?.artists ? existingRecord.artists.map(a => a.id) : [],
+    artistIds: isUpdate && existingRecord?.recordArtists ? existingRecord.recordArtists.map(a => a.id) : [],
   });
   const [songs, setSongs] = useState<EditableSong[]>(() => {
     if (isUpdate && existingSongs) {
@@ -69,7 +69,7 @@ export default function AddRecordPage({ isUpdate = false, existingRecord, existi
   const [artistResults, setArtistResults] = useState<ArtistPreviewDTO[]>([]);
   const [artistLoading, setArtistLoading] = useState(false);
   const [selectedArtists, setSelectedArtists] = useState<ArtistPreviewDTO[]>(
-    isUpdate && existingRecord?.artists ? existingRecord.artists : []
+    isUpdate && existingRecord?.recordArtists ? existingRecord.recordArtists : []
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 

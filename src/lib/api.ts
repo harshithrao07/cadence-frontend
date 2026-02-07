@@ -44,7 +44,9 @@ api.interceptors.response.use(
       };
 
 
-      const isAuthPage = window.location.pathname.startsWith("/auth");
+      const isAuthPage =
+        window.location.pathname.startsWith("/auth") ||
+        window.location.pathname.startsWith("/oauth-success");
 
       if (status === 401) {
         if (originalRequest.url?.includes("/auth/v1/refresh")) {

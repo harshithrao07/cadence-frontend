@@ -2,18 +2,22 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { MoreVertical, Plus, ListMusic, X, Music, Heart } from "lucide-react";
+import { MoreVertical, Plus, ListMusic, X, Music, Heart, ListPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { PlaylistPreviewDTO, UpsertPlaylistDTO } from "@/types/Playlist";
 import { useUser } from "@/context/UserContext";
+import { usePlayer } from "@/context/PlayerContext";
+import { EachSongDTO } from "@/types/Song";
 
 interface SongOptionsMenuProps {
   songId: string;
+  song?: EachSongDTO;
 }
 
-export default function SongOptionsMenu({ songId }: SongOptionsMenuProps) {
+export default function SongOptionsMenu({ songId, song }: SongOptionsMenuProps) {
   const { likedSongIds, toggleLike } = useUser();
+  const { addToQueue, queue, removeFromQueue } = usePlayer();
   const [isOpen, setIsOpen] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState<PlaylistPreviewDTO[]>([]);
@@ -172,11 +176,41 @@ export default function SongOptionsMenu({ songId }: SongOptionsMenuProps) {
             <ListMusic className="w-4 h-4" />
             Add to Playlist
           </button>
-          {/* Add to Queue - Ignored for now as per request */}
-          {/* <button className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2 opacity-50 cursor-not-allowed">
-            <ListPlus className="w-4 h-4" />
-            Add to Queue
-          </button> */}
+          {song && (
+            <>
+              <button
+                onClick={() => {
+                  addToQueue(song);
+                  setIsOpen(false);
+                  toast.success("Added to queue");
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+              >
+                <ListPlus className="w-4 h-4" />
+                Add to Queue
+              </button>
+              {queue.some(s => s.id === song.id) && (
+                <button
+                  onClick={() => {
+                    // Find all indices of this song in the queue
+                    const indices = queue
+                      .map((s, i) => s.id === song.id ? i : -1)
+                      .filter(i => i !== -1)
+                      .sort((a, b) => b - a); // Sort descending to remove safely
+                    
+                    indices.forEach(index => removeFromQueue(index));
+                    
+                    setIsOpen(false);
+                    toast.success("Removed from queue");
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-zinc-800 hover:text-white flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remove from Queue
+                </button>
+              )}
+            </>
+          )}
           </div>
         </div>
       )}

@@ -19,4 +19,6 @@ export interface UserProfileDTO {
     createdPlaylistsPreview: PlaylistPreviewDTO[];
     likedPlaylistsPreview: PlaylistPreviewDTO[];
     artistFollowing: ArtistPreviewDTO[];
+    emailVerified: boolean,
+    isOwner: boolean
 }

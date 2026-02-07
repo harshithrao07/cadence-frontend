@@ -7,7 +7,6 @@ export interface RegisterRequestDTO {
 export interface AuthenticationResponseDTO {
   id: string;
   accessToken: string;
-  refreshToken: string;
 }
 
 export interface RefreshTokenRequestDTO {

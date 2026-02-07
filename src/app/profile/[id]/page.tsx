@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { User, Mail, Music, Edit2, X } from "lucide-react";
+import { User, Mail, Music, Edit2, X, AlertCircle, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import api from "@/lib/api";
 import { UserProfileDTO } from "@/types/User";
@@ -50,12 +50,31 @@ export default function UserProfilePage() {
       const res = await api.get<ApiResponseDTO<UserProfileDTO>>(`/api/v1/user/${profileId}`);
       if (res.data.data) {
         setUser(res.data.data);
+        if (typeof res.data.data.isOwner === 'boolean') {
+          setIsOwner(res.data.data.isOwner);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch user profile:", error);
       toast.error("Failed to load profile");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    try {
+        const res = await api.get<ApiResponseDTO<boolean>>("/api/v1/email/generate-verification-token");
+        if (res.data.success) {
+            toast.success("Verification email sent! Link valid for 24 hours.");
+        } else {
+            toast.error(res.data.message || "Failed to send verification email. Please try again later.");
+        }
+    } catch (error: any) {
+        console.error("Failed to verify email:", error);
+        if (!error.response) {
+            toast.error("Failed to send verification email. Please try again later.");
+        }
     }
   };
 
@@ -167,10 +186,27 @@ export default function UserProfilePage() {
             </h1>
             
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-zinc-300">
-                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full">
-                    <Mail className="w-4 h-4 text-red-500" />
-                    <span>{user.email}</span>
-                </div>
+                {isOwner && (
+                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full">
+                        <Mail className="w-4 h-4 text-red-500" />
+                        <span>{user.email}</span>
+                    </div>
+                )}
+                {!user.emailVerified && isOwner && (
+                    <button 
+                        onClick={handleVerifyEmail}
+                        className="flex items-center gap-2 bg-yellow-500/10 hover:bg-yellow-500/20 px-3 py-1.5 rounded-full text-yellow-500 transition border border-yellow-500/20"
+                    >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Verify Email</span>
+                    </button>
+                )}
+                {isOwner && user.emailVerified && (
+                    <div className="flex items-center gap-2 bg-green-500/10 hover:bg-green-500/20 px-3 py-1.5 rounded-full text-green-500 transition border border-green-500/20">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Email Verified</span>
+                    </div>
+                )}
             </div>
             </div>
         </div>
@@ -203,14 +239,16 @@ export default function UserProfilePage() {
                 </Section>
 
                  {/* Liked Playlists Preview */}
-                 <Section title="Liked Playlists" onSeeAll={() => setActiveTab("playlists")}>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                        {user.likedPlaylistsPreview.slice(0, 5).map((playlist) => (
-                             <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
-                        ))}
-                        {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
-                    </div>
-                </Section>
+                 {isOwner && (
+                    <Section title="Liked Playlists" onSeeAll={() => setActiveTab("playlists")}>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                            {user.likedPlaylistsPreview.slice(0, 5).map((playlist) => (
+                                <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
+                            ))}
+                            {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
+                        </div>
+                    </Section>
+                 )}
                 
                 {/* Followed Artists Preview */}
                 <Section title="Following" onSeeAll={() => setActiveTab("artists")}>
@@ -236,14 +274,16 @@ export default function UserProfilePage() {
                         {user.createdPlaylistsPreview.length === 0 && <EmptyState message="No playlists created" />}
                     </div>
                 </Section>
-                 <Section title="Liked Playlists">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                        {user.likedPlaylistsPreview.map((playlist) => (
-                            <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
-                        ))}
-                         {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
-                    </div>
-                </Section>
+                 {isOwner && (
+                    <Section title="Liked Playlists">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                            {user.likedPlaylistsPreview.map((playlist) => (
+                                <PlaylistCard key={playlist.id} playlist={playlist} onClick={() => router.push(`/playlist/${playlist.id}`)} />
+                            ))}
+                            {user.likedPlaylistsPreview.length === 0 && <EmptyState message="No liked playlists" />}
+                        </div>
+                    </Section>
+                 )}
             </div>
         )}
 

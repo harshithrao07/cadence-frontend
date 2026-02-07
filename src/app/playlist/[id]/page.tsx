@@ -27,7 +27,6 @@ export default function PlaylistPage() {
   const [songs, setSongs] = useState<EachSongDTO[]>([]);
   const [playlist, setPlaylist] = useState<PlaylistPreviewDTO | null>(null);
   const [loading, setLoading] = useState(true);
-  const [shuffle, setShuffle] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Edit Modal State
@@ -94,22 +93,13 @@ export default function PlaylistPage() {
 
     if (!songs.length) return;
 
-    let ordered = [...songs];
-    if (shuffle) {
-      ordered = [...songs];
-      for (let i = ordered.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
-      }
-    }
-
-    const startIndex = ordered.findIndex(s => s.id === song.id);
+    const startIndex = songs.findIndex(s => s.id === song.id);
     if (startIndex === -1) {
       playSong(song);
       return;
     }
 
-    playQueue(ordered, startIndex);
+    playQueue(songs, startIndex);
   };
 
   const isCurrentSongPlaying = (songId: string) => {
@@ -271,11 +261,17 @@ export default function PlaylistPage() {
             )}
           </button>
           <button
-            onClick={() => setShuffle((prev) => !prev)}
-            className={`w-10 h-10 border rounded-full flex items-center justify-center transition ${
-              shuffle ? "border-red-500 text-red-500" : "border-zinc-600 text-zinc-400 hover:border-white hover:text-white"
-            }`}
-            title="Shuffle"
+            onClick={() => {
+              if (songs.length === 0) return;
+              const shuffled = [...songs];
+              for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+              }
+              playQueue(shuffled, 0);
+            }}
+            className="w-10 h-10 border border-zinc-600 text-zinc-400 hover:border-white hover:text-white rounded-full flex items-center justify-center transition"
+            title="Shuffle Play"
           >
             <Shuffle className="w-5 h-5" />
           </button>
@@ -384,7 +380,7 @@ export default function PlaylistPage() {
                 </span>
               </div>
               <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
-                <SongOptionsMenu songId={song.id} />
+                <SongOptionsMenu songId={song.id} song={song} />
               </div>
             </div>
           ))

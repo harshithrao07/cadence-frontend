@@ -6,6 +6,8 @@ import { User, Music2, LogOut, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import GlobalSearch from "./search/GlobalSearch";
+import { usePlayer } from "@/context/PlayerContext";
+import api from "@/lib/api";
 
 export default function Navbar() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -13,6 +15,7 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const { resetPlayer } = usePlayer();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,11 +41,25 @@ export default function Navbar() {
     toast("Are you sure you want to logout?", {
       action: {
         label: "Logout",
-        onClick: () => {
-          localStorage.removeItem("auth_details");
-          setUserId(null);
-          router.push("/auth/login");
-          toast.success("Logged out successfully");
+        onClick: async () => {
+          try {
+            await api.post("/auth/v1/logout");
+          } catch (e) {
+            console.error("Logout error:", e);
+          } finally {
+            resetPlayer();
+
+            document.cookie.split(";").forEach((c) => {
+              document.cookie = c
+                .replace(/^ +/, "")
+                .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            localStorage.removeItem("auth_details");
+            setUserId(null);
+            router.push("/auth/login");
+            toast.success("Logged out successfully");
+          }
         },
       },
       cancel: {
@@ -52,7 +69,7 @@ export default function Navbar() {
     });
   };
 
-  if (pathname.startsWith("/auth")) return null;
+  if (pathname.startsWith("/auth") || pathname === "/records/add") return null;
 
   return (
     <nav

@@ -341,13 +341,15 @@ const Signup = () => {
               </div>
 
               <Button
-                {...({
-                  variant: "outlined",
-                  color: "blue-gray",
-                  onClick: () => console.log("Google signup"),
-                  className:
-                    "relative w-full rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100",
-                } as any)}
+                placeholder=""
+                onResize={undefined}
+                onResizeCapture={undefined}
+                onPointerEnterCapture={undefined}
+                onPointerLeaveCapture={undefined}
+                variant="outlined"
+                color="blue-gray"
+                onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}oauth2/authorization/google`}
+                className="relative w-full rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100"
               >
                 <Image
                   src="https://docs.material-tailwind.com/icons/google.svg"

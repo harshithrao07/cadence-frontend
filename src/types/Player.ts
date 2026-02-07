@@ -3,6 +3,7 @@ import { EachSongDTO } from "./Song";
 export interface PlayerState {
   currentSong: EachSongDTO | null;
   isPlaying: boolean;
+  isBuffering: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -21,4 +22,6 @@ export interface PlayerContextType extends PlayerState {
   playNext: () => void;
   playPrevious: () => void;
   resetPlayer: () => void;
+  removeFromQueue: (index: number) => void;
+  addToQueue: (song: EachSongDTO) => void;
 }

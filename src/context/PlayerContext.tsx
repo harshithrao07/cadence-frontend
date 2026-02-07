@@ -15,9 +15,63 @@ export const usePlayer = () => {
   return context;
 };
 
+// Helper function for streaming with auth handling
+const fetchStreamWithAuth = async (url: string, signal: AbortSignal, headers: Record<string, string> = {}) => {
+  const getAuthHeader = () => {
+    if (typeof window === "undefined") return {};
+    try {
+      const authDetails = localStorage.getItem("auth_details");
+      if (!authDetails) return {};
+      const { accessToken } = JSON.parse(authDetails);
+      return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+    } catch (e) {
+      return {};
+    }
+  };
+
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  // Ensure no double slash if url starts with /
+  const fullUrl = url.startsWith("http") ? url : `${baseUrl.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+
+  let response = await fetch(fullUrl, {
+    headers: { ...getAuthHeader(), ...headers },
+    signal,
+  });
+
+  if (response.status === 401) {
+    // Try refresh
+    try {
+      const refreshRes = await api.post('auth/v1/refresh', {}, { withCredentials: true });
+      const accessToken = refreshRes.data;
+      
+      // Update local storage
+      const oldAuthStr = localStorage.getItem("auth_details");
+      const oldAuth = oldAuthStr ? JSON.parse(oldAuthStr) : {};
+      localStorage.setItem("auth_details", JSON.stringify({ ...oldAuth, accessToken }));
+
+      // Retry
+      response = await fetch(fullUrl, {
+        headers: { Authorization: `Bearer ${accessToken}`, ...headers },
+        signal,
+      });
+    } catch (e) {
+      throw new Error("Session expired");
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(`Stream request failed: ${response.status}`);
+  }
+
+  return response;
+};
+
+const PRELOAD_BYTES = 512 * 1024; // 512KB
+
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentSong, setCurrentSong] = useState<EachSongDTO | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.5);
@@ -28,8 +82,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const activeUrlRef = useRef<string | null>(null);
   const queueRef = useRef<EachSongDTO[]>([]);
   const queueIndexRef = useRef<number>(-1);
+  const currentSongRef = useRef<EachSongDTO | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const playRequestIdRef = useRef(0);
+  const preloadCache = useRef<Map<string, { buffer: ArrayBuffer, contentType: string }>>(new Map());
+  const onSeekRef = useRef<(() => void) | null>(null);
+  const onResumeFetchRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -39,17 +97,39 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const audio = audioRef.current;
 
       const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-      const handleDurationChange = () => setDuration(audio.duration);
-
+      const handleDurationChange = () => {
+        const d = audio.duration;
+        if (Number.isFinite(d)) {
+          setDuration(d);
+        } else if (currentSongRef.current?.totalDuration) {
+          setDuration(currentSongRef.current.totalDuration);
+        }
+      };
+      const handleWaiting = () => setIsBuffering(true);
+      const handlePlaying = () => setIsBuffering(false);
+      const handleCanPlay = () => setIsBuffering(false);
+      const handleSeeking = () => {
+        if (onSeekRef.current) onSeekRef.current();
+      };
+      
       audio.addEventListener("timeupdate", handleTimeUpdate);
       audio.addEventListener("durationchange", handleDurationChange);
+      audio.addEventListener("waiting", handleWaiting);
+      audio.addEventListener("playing", handlePlaying);
+      audio.addEventListener("canplay", handleCanPlay);
+      audio.addEventListener("seeking", handleSeeking);
 
       return () => {
         audio.removeEventListener("timeupdate", handleTimeUpdate);
         audio.removeEventListener("durationchange", handleDurationChange);
+        audio.removeEventListener("waiting", handleWaiting);
+        audio.removeEventListener("playing", handlePlaying);
+        audio.removeEventListener("canplay", handleCanPlay);
+        audio.removeEventListener("seeking", handleSeeking);
+
         audio.pause();
         audio.src = "";
-        if (activeUrlRef.current && activeUrlRef.current.startsWith("blob:")) {
+        if (activeUrlRef.current) {
           URL.revokeObjectURL(activeUrlRef.current);
           activeUrlRef.current = null;
         }
@@ -62,8 +142,66 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [queue]);
 
   useEffect(() => {
+    currentSongRef.current = currentSong;
+  }, [currentSong]);
+
+  useEffect(() => {
     queueIndexRef.current = queueIndex;
   }, [queueIndex]);
+
+  useEffect(() => {
+    const preloadNext = async () => {
+      const q = queueRef.current;
+      const idx = queueIndexRef.current;
+      // If queue is empty or index invalid, don't preload, unless index is -1 but queue has items (start)
+      if (q.length === 0) return;
+
+      // Preload next 2 songs
+      for (let i = 1; i <= 2; i++) {
+        const nextIdx = idx + i;
+        if (nextIdx >= q.length) break;
+
+        const nextSong = q[nextIdx];
+        if (!nextSong || preloadCache.current.has(nextSong.id)) continue;
+
+        try {
+          if ((nextSong as any).file) continue;
+
+          const endpoint = `api/v1/song/stream/${nextSong.id}`;
+          const controller = new AbortController();
+
+          const response = await fetchStreamWithAuth(endpoint, controller.signal, { Range: `bytes=0-${PRELOAD_BYTES}` });
+          if (response.status === 206 || response.status === 200) {
+            const contentType = response.headers.get('Content-Type') || 'audio/mpeg';
+            const buffer = await response.arrayBuffer();
+            if (buffer.byteLength > 0) {
+              preloadCache.current.set(nextSong.id, { buffer, contentType });
+            }
+          }
+        } catch (e) {
+          // Ignore preload errors
+        }
+      }
+
+      // Cleanup cache
+      const validIds = new Set<string>();
+      // Keep current song in cache if needed? No, once playing, we don't need it in preload cache usually,
+      // but if we seek back or restart, maybe? But loadAndPlaySong handles it.
+      // Let's keep a window around current index.
+      const startKeep = Math.max(0, idx);
+      for (let i = startKeep; i < Math.min(idx + 5, q.length); i++) {
+        validIds.add(q[i].id);
+      }
+      for (const id of preloadCache.current.keys()) {
+        if (!validIds.has(id)) {
+          preloadCache.current.delete(id);
+        }
+      }
+    };
+
+    const timer = setTimeout(preloadNext, 500);
+    return () => clearTimeout(timer);
+  }, [queue, queueIndex]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -72,7 +210,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [volume]);
 
   const loadAndPlaySong = React.useCallback(
-    async (song: EachSongDTO) => {
+    async (song: EachSongDTO, startTime: number = 0) => {
       if (!audioRef.current) return;
 
       const requestId = ++playRequestIdRef.current;
@@ -84,10 +222,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const audio = audioRef.current;
       audio.pause();
-      audio.currentTime = 0;
+      audio.currentTime = startTime;
 
       setCurrentSong(song);
-      setCurrentTime(0);
+      setCurrentTime(startTime);
+      setDuration(song.totalDuration || 0);
 
       try {
         let url: string | null = null;
@@ -98,18 +237,167 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const blob = new Blob([localFile], { type: localFile.type || "audio/mpeg" });
           url = window.URL.createObjectURL(blob);
         } else {
+          // Stream using MediaSource and fetchWithAuth
+          const endpoint = `api/v1/song/stream/${song.id}`;
+
           controller = new AbortController();
           requestControllerRef.current = controller;
-          const response = await api.get(
-            `api/v1/song/stream/${song.id}`,
-            {
-              responseType: "blob",
-              signal: controller.signal,
-            }
-          );
 
-          const blob = new Blob([response.data], { type: "audio/mpeg" });
-          url = window.URL.createObjectURL(blob);
+          try {
+            const mediaSource = new MediaSource();
+            url = window.URL.createObjectURL(mediaSource);
+
+            let sourceBuffer: SourceBuffer | null = null;
+            let totalSizeBytes = 0;
+            let seekTimeout: NodeJS.Timeout | null = null;
+
+            const fetchAndAppend = async (startByte: number, timeOffset: number = 0) => {
+                if (controller) controller.abort();
+                controller = new AbortController();
+                requestControllerRef.current = controller;
+
+                try {
+                    const response = await fetchStreamWithAuth(endpoint, controller.signal, { Range: `bytes=${startByte}-` });
+                    
+                    if (response.status === 206 || response.status === 200) {
+                        const range = response.headers.get('Content-Range');
+                        if (range) {
+                            const parts = range.split('/');
+                            if (parts[1] && parts[1] !== '*') totalSizeBytes = parseInt(parts[1], 10);
+                        } else if (response.status === 200) {
+                            const len = response.headers.get('Content-Length');
+                            if (len) totalSizeBytes = parseInt(len, 10);
+                        }
+                    }
+
+                    if (!sourceBuffer || mediaSource.readyState !== 'open') return;
+
+                    if (timeOffset > 0 && !sourceBuffer.updating) {
+                        try {
+                             // Reset source buffer parsing state for new segment
+                             sourceBuffer.abort(); 
+                             sourceBuffer.timestampOffset = timeOffset;
+                        } catch (e) { console.error(e); }
+                    }
+
+                    if (!response.body) return;
+                    const reader = response.body.getReader();
+
+                    const pump = async () => {
+                        try {
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                
+                                if (sourceBuffer.updating) {
+                                    await new Promise(r => sourceBuffer.addEventListener('updateend', r, { once: true }));
+                                }
+                                if (mediaSource.readyState === 'open') {
+                                    sourceBuffer.appendBuffer(value);
+                                }
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+                    };
+                    await pump();
+                } catch (e) {
+                    // ignore aborts
+                }
+            };
+
+            onSeekRef.current = () => {
+                if (!sourceBuffer || totalSizeBytes === 0) return;
+                const seekTime = audio.currentTime;
+                
+                // Check if buffered
+                for (let i = 0; i < sourceBuffer.buffered.length; i++) {
+                    if (seekTime >= sourceBuffer.buffered.start(i) && seekTime <= sourceBuffer.buffered.end(i) - 0.5) {
+                        return; // Already buffered
+                    }
+                }
+                
+                setIsBuffering(true);
+                
+                if (seekTimeout) clearTimeout(seekTimeout);
+                seekTimeout = setTimeout(() => {
+                    const duration = audio.duration || song.totalDuration || 1;
+                    // Estimate byte position
+                    const bytePos = Math.floor((seekTime / duration) * totalSizeBytes);
+                    fetchAndAppend(bytePos, seekTime);
+                }, 200);
+            };
+
+            onResumeFetchRef.current = () => {
+                if (!sourceBuffer || mediaSource.readyState !== 'open') return;
+                // If we are already fetching, don't interrupt
+                if (requestControllerRef.current && !requestControllerRef.current.signal.aborted) return;
+                
+                const seekTime = audio.currentTime;
+                // Find end of buffered range covering seekTime
+                let startByteTime = seekTime;
+                for(let i=0; i<sourceBuffer.buffered.length; i++) {
+                    if(sourceBuffer.buffered.start(i) <= seekTime + 0.1 && sourceBuffer.buffered.end(i) >= seekTime - 0.1) {
+                        startByteTime = sourceBuffer.buffered.end(i);
+                        break;
+                    }
+                }
+                
+                // If buffered up to near end, no need to fetch
+                if (startByteTime >= (song.totalDuration || audio.duration || 1) - 1) return;
+                
+                const bytePos = Math.floor((startByteTime / (song.totalDuration || audio.duration || 1)) * totalSizeBytes);
+                // Resume fetching from end of buffer
+                // We use timestampOffset = startByteTime because we are appending from there
+                fetchAndAppend(bytePos, startByteTime);
+            };
+
+            mediaSource.addEventListener('sourceopen', async () => {
+                if (mediaSource.readyState !== 'open') return;
+
+                const cached = preloadCache.current.get(song.id);
+                let contentType = 'audio/mpeg';
+                let initialBuffer: ArrayBuffer | null = null;
+
+                if (cached) {
+                    initialBuffer = cached.buffer;
+                    contentType = cached.contentType;
+                } else {
+                     // If not cached, we start fetching from 0. 
+                     // We need content type. We can fetch first byte or just start stream.
+                     // To be safe, let's start stream 0- and peek headers.
+                }
+
+                const mime = contentType;
+                const codec = MediaSource.isTypeSupported(mime) ? mime : 'audio/mpeg';
+
+                try {
+                    sourceBuffer = mediaSource.addSourceBuffer(codec);
+                    
+                    if (cached && initialBuffer) {
+                        sourceBuffer.appendBuffer(initialBuffer);
+                        // Fetch rest
+                        fetchAndAppend(initialBuffer.byteLength, 0); // timestampOffset 0? 
+                        // Actually if we append cached buffer, timestamps are 0-based.
+                        // The rest should follow.
+                        // fetchAndAppend aborts previous controller? No, we just started.
+                        // But wait, fetchAndAppend does sourceBuffer.abort() if timeOffset > 0.
+                        // Here timeOffset is 0 (or close to end of buffer). 
+                        // If we pass 0, logic skips abort.
+                    } else {
+                        fetchAndAppend(0, 0);
+                    }
+                } catch (e) {
+                    console.error("MediaSource error:", e);
+                }
+            }, { once: true });
+
+          } catch (error: any) {
+             if (error.code === "ERR_CANCELED" || error.name === "CanceledError" || error.name === "AbortError") {
+                 return;
+             }
+             throw error;
+          }
         }
 
         if (controller && requestControllerRef.current === controller) {
@@ -129,6 +417,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
           activeUrlRef.current = url;
           audio.src = url;
+          if (startTime > 0) {
+            audio.currentTime = startTime;
+          }
         }
 
         await audio.play();
@@ -140,7 +431,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         setIsPlaying(true);
       } catch (error: any) {
-        if (error && (error.code === "ERR_CANCELED" || error.name === "CanceledError")) {
+        if (error && (error.code === "ERR_CANCELED" || error.name === "CanceledError" || error.name === "AbortError")) {
           return;
         }
         console.error("Error playing song:", error);
@@ -224,7 +515,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [loadAndPlaySong]);
 
   const pauseSong = React.useCallback(() => {
-    playRequestIdRef.current++;
+    // We don't increment playRequestIdRef here because we might want to resume the same song session.
+    // We only want to stop the current network request.
     if (requestControllerRef.current) {
       requestControllerRef.current.abort();
       requestControllerRef.current = null;
@@ -237,10 +529,20 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const resumeSong = React.useCallback(() => {
     if (audioRef.current && currentSong) {
+      if ((!audioRef.current.src || audioRef.current.src === window.location.href) && !activeUrlRef.current) {
+         loadAndPlaySong(currentSong, currentTime);
+         return;
+      }
+      
+      // Check if we need to resume fetching
+      if (onResumeFetchRef.current) {
+          onResumeFetchRef.current();
+      }
+      
       audioRef.current.play();
       setIsPlaying(true);
     }
-  }, [currentSong]);
+  }, [currentSong, currentTime, loadAndPlaySong]);
 
   const togglePlay = React.useCallback(() => {
     if (isPlaying) {
@@ -283,11 +585,43 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     queueIndexRef.current = -1;
   }, []);
 
+  const removeFromQueue = React.useCallback((index: number) => {
+    setQueue((prevQueue) => {
+      const newQueue = [...prevQueue];
+      newQueue.splice(index, 1);
+      
+      if (index < queueIndexRef.current) {
+        setQueueIndex(queueIndexRef.current - 1);
+        queueIndexRef.current = queueIndexRef.current - 1;
+      }
+      
+      queueRef.current = newQueue;
+      return newQueue;
+    });
+  }, []);
+
+  const addToQueue = React.useCallback((song: EachSongDTO) => {
+    setQueue((prevQueue) => {
+      const currentIndex = queueIndexRef.current;
+      const newQueue = [...prevQueue];
+      
+      if (currentIndex === -1 || newQueue.length === 0) {
+        newQueue.push(song);
+      } else {
+        newQueue.splice(currentIndex + 1, 0, song);
+      }
+      
+      queueRef.current = newQueue;
+      return newQueue;
+    });
+  }, []);
+
   return (
     <PlayerContext.Provider
       value={{
         currentSong,
         isPlaying,
+        isBuffering,
         currentTime,
         duration,
         volume,
@@ -303,6 +637,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         playNext,
         playPrevious,
         resetPlayer,
+        removeFromQueue,
+        addToQueue,
       }}
     >
       {children}

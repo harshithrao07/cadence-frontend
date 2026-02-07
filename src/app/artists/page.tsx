@@ -32,17 +32,7 @@ export default function ArtistsPage() {
       <header className="relative px-8 pt-16 pb-24">
         <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent pointer-events-none" />
         <div className="relative">
-          <div className="flex items-center gap-3 mb-6">
-            <Image
-              src="/images/cadence-logo.png"
-              width={20}
-              height={20}
-              alt="Cadence"
-            />
-            <h1 className="text-2xl font-bold">Cadence</h1>
-          </div>
-
-          <h2 className="text-7xl font-black mb-6 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+          <h2 className="text-5xl font-black my-2 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
             All Artists
           </h2>
 

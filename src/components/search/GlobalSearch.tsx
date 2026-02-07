@@ -177,7 +177,7 @@ export default function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                                      <div className="flex-1 min-w-0">
                                         <div className="text-sm font-medium text-white truncate group-hover:text-red-500 transition-colors">{record.title}</div>
                                         <div className="text-xs text-zinc-400 truncate">
-                                            {record.recordType} • {record.artists?.map(a => a.name).join(", ") || "Unknown Artist"}
+                                            {record.recordType} • {record.recordArtists?.map(a => a.name).join(", ") || "Unknown Artist"}
                                         </div>
                                      </div>
                                 </div>

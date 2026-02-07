@@ -13,7 +13,7 @@ import { usePlayer } from "@/context/PlayerContext";
 export default function SectionPage() {
   const { type } = useParams();
   const router = useRouter();
-  const { playSong } = usePlayer();
+  const { playSong, playQueue } = usePlayer();
   const [data, setData] = useState<DiscoverDTO | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -44,12 +44,18 @@ export default function SectionPage() {
   const getSectionContent = () => {
     switch (type) {
       case "recently-played":
+        if (data.recentlyPlayedSongs.length === 0) {
+           return {
+             title: "Recently Played",
+             content: <div className="text-zinc-500">Nothing to display</div>,
+           };
+        }
         return {
           title: "Recently Played",
           content: (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {data.recentlyPlayedSongs.map((song) => (
-                <SongCard key={song.id} song={song} onClick={() => playSong(song)} />
+              {data.recentlyPlayedSongs.map((song, index) => (
+                <SongCard key={song.id} song={song} onClick={() => playQueue(data.recentlyPlayedSongs, index)} />
               ))}
             </div>
           ),
@@ -81,8 +87,8 @@ export default function SectionPage() {
             title: "Trending Songs",
             content: (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {data.trendingSongs.map((song) => (
-                  <SongCard key={song.id} song={song} onClick={() => playSong(song)} />
+                {data.trendingSongs.map((song, index) => (
+                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.trendingSongs, index)} />
                 ))}
               </div>
             ),
@@ -114,8 +120,8 @@ export default function SectionPage() {
             title: "Recommended for You",
             content: (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {data.recommendedSongs.map((song) => (
-                  <SongCard key={song.id} song={song} onClick={() => playSong(song)} />
+                {data.recommendedSongs.map((song, index) => (
+                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.recommendedSongs, index)} />
                 ))}
               </div>
             ),

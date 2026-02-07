@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
 import { useUser } from "@/context/UserContext";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize2, ListMusic, Heart, X } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize2, ListMusic, Heart, X, Trash2, Loader2 } from "lucide-react";
 import Image from "next/image";
 
 const formatTime = (time: number) => {
@@ -14,9 +15,11 @@ const formatTime = (time: number) => {
 };
 
 export const MusicPlayer: React.FC = () => {
+    const pathname = usePathname();
     const {
         currentSong,
         isPlaying,
+        isBuffering,
         currentTime,
         duration,
         volume,
@@ -27,7 +30,8 @@ export const MusicPlayer: React.FC = () => {
         setVolume,
         playNext,
         playPrevious,
-        playQueue
+        playQueue,
+        removeFromQueue
     } = usePlayer();
     
     const { likedSongIds, toggleLike } = useUser();
@@ -51,6 +55,8 @@ export const MusicPlayer: React.FC = () => {
             document.body.style.overflow = originalOverflow;
         };
     }, [showFullscreen]);
+
+    if (pathname?.startsWith("/auth")) return null;
 
     if (!currentSong) return null;
 
@@ -115,7 +121,9 @@ export const MusicPlayer: React.FC = () => {
                         onClick={togglePlay}
                         className="w-8 h-8 rounded-full bg-white flex items-center justify-center hover:scale-105 transition"
                     >
-                        {isPlaying ? (
+                        {isBuffering ? (
+                            <Loader2 className="w-5 h-5 text-black animate-spin" />
+                        ) : isPlaying ? (
                             <Pause className="w-5 h-5 text-black fill-current" />
                         ) : (
                             <Play className="w-5 h-5 text-black fill-current ml-0.5" />
@@ -241,31 +249,42 @@ export const MusicPlayer: React.FC = () => {
                                 {upcomingQueue.map((song, idx) => {
                                     const absoluteIndex = (currentIndex ?? 0) + 1 + idx;
                                     return (
-                                        <button
-                                            key={song.id + absoluteIndex}
-                                            onClick={() => playQueue(queue, absoluteIndex)}
-                                            className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-zinc-900 text-left transition"
-                                        >
-                                            <div className="w-9 h-9 relative flex-shrink-0 rounded-md overflow-hidden bg-zinc-900">
-                                                <Image
-                                                    src={song.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
-                                                    alt={song.title}
-                                                    fill
-                                                    className="object-cover"
-                                                />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate text-white">
-                                                    {song.title}
+                                        <div key={song.id + absoluteIndex} className="group relative flex items-center gap-2">
+                                            <button
+                                                onClick={() => playQueue(queue, absoluteIndex)}
+                                                className="flex-1 flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-zinc-900 text-left transition min-w-0"
+                                            >
+                                                <div className="w-9 h-9 relative flex-shrink-0 rounded-md overflow-hidden bg-zinc-900">
+                                                    <Image
+                                                        src={song.recordPreviewWithCoverImageDTO?.coverUrl || "/images/records/record-placeholder.png"}
+                                                        alt={song.title}
+                                                        fill
+                                                        className="object-cover"
+                                                    />
                                                 </div>
-                                                <div className="text-xs text-gray-400 truncate">
-                                                    {song.artists?.map(a => a.name).join(", ") || "Unknown Artist"}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium truncate text-white">
+                                                        {song.title}
+                                                    </div>
+                                                    <div className="text-xs text-gray-400 truncate">
+                                                        {song.artists?.map(a => a.name).join(", ") || "Unknown Artist"}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-xs text-gray-500 pl-2">
-                                                {formatTime(song.totalDuration || 0)}
-                                            </div>
-                                        </button>
+                                                <div className="text-xs text-gray-500 pl-2">
+                                                    {formatTime(song.totalDuration || 0)}
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    removeFromQueue(absoluteIndex);
+                                                }}
+                                                className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                                                title="Remove from queue"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     );
                                 })}
                             </div>

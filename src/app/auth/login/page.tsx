@@ -91,13 +91,16 @@ const Login = () => {
 
         <div className="flex flex-col items-center justify-center gap-y-8 w-full">
           <Button
-            {...({
-              variant: "outlined",
-              ripple: false,
-              color: "blue-gray",
-              className:
-                "relative w-1/2 rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100",
-            } as any)}
+            placeholder=""
+            onResize={undefined}
+            onResizeCapture={undefined}
+            onPointerEnterCapture={undefined}
+            onPointerLeaveCapture={undefined}
+            variant="outlined"
+            ripple={false}
+            color="blue-gray"
+            onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL}oauth2/authorization/google`}
+            className="relative w-1/2 rounded-full normal-case text-md font-outfit text-white hover:border-white hover:opacity-100"
           >
             <Image
               src="https://docs.material-tailwind.com/icons/google.svg"

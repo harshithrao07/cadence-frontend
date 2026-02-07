@@ -49,6 +49,11 @@ api.interceptors.response.use(
       if (status === 401) {
         if (originalRequest.url?.includes("/auth/v1/refresh")) {
           // Refresh token is invalid/expired
+          document.cookie.split(";").forEach((c) => {
+            document.cookie = c
+              .replace(/^ +/, "")
+              .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+          });
           localStorage.removeItem("auth_details");
           if (!isAuthPage) {
             toast.error("Session expired. Please login again.");
@@ -56,49 +61,43 @@ api.interceptors.response.use(
           }
         } else {
           // Access token is invalid/expired
-          const authDetails: AuthenticationResponseDTO = JSON.parse(
-            localStorage.getItem("auth_details")
-          );
+          try {
+            const response = await axios.post(
+              `${process.env.NEXT_PUBLIC_API_URL}auth/v1/refresh`,
+              {},
+              { withCredentials: true }
+            );
 
-          if (authDetails?.refreshToken) {
-            try {
-              const response = await axios.post(
-                `${process.env.NEXT_PUBLIC_API_URL}auth/v1/refresh`,
-                { refreshToken: authDetails.refreshToken }
-              );
+            const accessToken = response.data;
 
-              const accessToken = response.data.data;
+            const oldAuthDetails: AuthenticationResponseDTO = JSON.parse(
+              localStorage.getItem("auth_details") || "{}"
+            );
 
-              const oldAuthDetails: AuthenticationResponseDTO = JSON.parse(
-                localStorage.getItem("auth_details") || "{}"
-              );
+            localStorage.setItem(
+              "auth_details",
+              JSON.stringify({
+                ...oldAuthDetails,
+                accessToken,
+              })
+            );
 
-              localStorage.setItem(
-                "auth_details",
-                JSON.stringify({
-                  ...oldAuthDetails,
-                  accessToken,
-                })
-              );
-
-              // Retry the original request with new access token
-              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-              return axios(originalRequest);
-            } catch (refreshError: any) {
-              // Refresh token failed
-              localStorage.removeItem("auth_details");
-              if (!isAuthPage) {
-                toast.error("Session expired. Please login again.");
-                window.location.href = "/auth/login";
-              }
-              return Promise.reject(refreshError);
-            }
-          } else {
-            // No refresh token, force logout
+            // Retry the original request with new access token
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            return axios(originalRequest);
+          } catch (refreshError: any) {
+            // Refresh token failed
+            document.cookie.split(";").forEach((c) => {
+              document.cookie = c
+                .replace(/^ +/, "")
+                .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
             localStorage.removeItem("auth_details");
             if (!isAuthPage) {
+              toast.error("Session expired. Please login again.");
               window.location.href = "/auth/login";
             }
+            return Promise.reject(refreshError);
           }
         }
       } else if (status >= 400) {

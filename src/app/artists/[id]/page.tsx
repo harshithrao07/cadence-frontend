@@ -48,7 +48,6 @@ export default function ArtistProfile() {
   const [artistRecords, setArtistRecords] = useState<RecordPreviewDTO[]>([]);
   const router = useRouter();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [showFollowers, setShowFollowers] = useState(false);
@@ -158,14 +157,7 @@ export default function ArtistProfile() {
 
     if (!popularSongs.length) return;
 
-    let orderedTracks = [...popularSongs];
-    if (shuffle) {
-      orderedTracks = [...popularSongs];
-      for (let i = orderedTracks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [orderedTracks[i], orderedTracks[j]] = [orderedTracks[j], orderedTracks[i]];
-      }
-    }
+    const orderedTracks = [...popularSongs];
 
     const queueSongs: EachSongDTO[] = orderedTracks.map((t) => ({
       id: t.id,
@@ -338,9 +330,29 @@ export default function ArtistProfile() {
             </button>
 
             <button
-              onClick={() => setShuffle((prev) => !prev)}
-              className={`w-10 h-10 border rounded-full flex items-center justify-center transition ${shuffle ? "border-red-500 text-red-500" : "border-gray-600 text-gray-400 hover:border-white hover:text-white"}`}
-              title="Shuffle"
+              onClick={() => {
+                if (popularSongs.length === 0) return;
+                const shuffled = [...popularSongs];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                  const j = Math.floor(Math.random() * (i + 1));
+                  [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                const queueSongs: EachSongDTO[] = shuffled.map((t) => ({
+                  id: t.id,
+                  title: t.title,
+                  totalDuration: t.totalDuration,
+                  artists: t.artists,
+                  genres: [],
+                  recordPreviewWithCoverImageDTO: {
+                    id: t.recordId,
+                    title: t.recordTitle,
+                    coverUrl: t.coverUrl,
+                  },
+                }));
+                playQueue(queueSongs, 0);
+              }}
+              className="w-10 h-10 border border-gray-600 text-gray-400 hover:border-white hover:text-white rounded-full flex items-center justify-center transition"
+              title="Shuffle Play"
             >
               <Shuffle className="w-5 h-5" />
             </button>
@@ -470,7 +482,18 @@ export default function ArtistProfile() {
                   </div>
                 </div>
                 <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
-                  <SongOptionsMenu songId={track.id} />
+                  <SongOptionsMenu songId={track.id} song={{
+                    id: track.id,
+                    title: track.title,
+                    totalDuration: track.totalDuration,
+                    artists: track.artists,
+                    genres: [],
+                    recordPreviewWithCoverImageDTO: {
+                      id: track.recordId,
+                      title: track.recordTitle,
+                      coverUrl: track.coverUrl,
+                    }
+                  }} />
                 </div>
               </div>
             ))}

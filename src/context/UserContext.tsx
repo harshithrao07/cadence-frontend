@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { EachSongDTO } from "@/types/Song";
@@ -33,16 +34,37 @@ export const useUser = () => {
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const router = useRouter();
+  const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [likedSongsLoading, setLikedSongsLoading] = useState(true);
   const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
   const [likedPlaylistIds, setLikedPlaylistIds] = useState<Set<string>>(new Set());
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    checkIsAdmin();
-    fetchLikedSongs();
-    fetchLikedPlaylists();
+    const authDetails = localStorage.getItem("auth_details");
+    const isAuthPage = pathname?.startsWith("/auth");
+
+    if (!authDetails) {
+      if (!isAuthPage) {
+        router.push("/auth/login");
+      } else {
+        setIsCheckingAuth(false);
+      }
+    } else {
+      setIsCheckingAuth(false);
+    }
+  }, [pathname, router]);
+
+  useEffect(() => {
+    const authDetails = localStorage.getItem("auth_details");
+    if (authDetails) {
+      checkIsAdmin();
+      fetchLikedSongs();
+      fetchLikedPlaylists();
+    }
   }, []);
 
   const checkIsAdmin = async (): Promise<boolean | null> => {
@@ -203,7 +225,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         togglePlaylistLike,
       }}
     >
-      {children}
+      <div>
+        {children}
+        {isCheckingAuth && (
+          <div className="fixed inset-0 z-[100] flex justify-center items-center bg-black">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-gray-600"></div>
+          </div>
+        )}
+      </div>
     </UserContext.Provider>
   );
 };

@@ -231,7 +231,7 @@ export default function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                     
                     {!results.songs?.length && !results.records?.length && !results.artists?.length && !results.playlists?.length && (
                         <div className="text-center text-zinc-500 py-8">
-                            No results found for "{query}"
+                            {`No results found for "${query}"`}
                         </div>
                     )}
                 </>

@@ -112,19 +112,6 @@ export default function RecordsClient() {
 
   return (
     <div className="min-h-screen text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
-          <button
-            onClick={() => router.back()}
-            className="text-gray-400 hover:text-white transition"
-          >
-            <ArrowLeft />
-          </button>
-          <h1 className="text-2xl font-bold">Records</h1>
-        </div>
-      </div>
-
       {/* Content */}
       <div className="max-w-6xl mx-auto px-6 py-8">
         {recordsWithSongs.length === 0 ? (

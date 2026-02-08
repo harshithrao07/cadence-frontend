@@ -53,6 +53,7 @@ export default function ArtistProfile() {
   const [showFollowers, setShowFollowers] = useState(false);
   const [followersList, setFollowersList] = useState<UserPreviewDTO[]>([]);
   const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -67,32 +68,35 @@ export default function ArtistProfile() {
       }));
     }
 
-    // Fetch artist data based on id
-    const fetchArtistData = async (artistId) => {
+    const loadData = async () => {
       try {
-        const res = await api.get<ApiResponseDTO<ArtistProfileDTO>>(
-          "/api/v1/artist/" + artistId
-        );
-        setArtist(res.data.data);
-        setPopularSongs(res.data.data.popularSongs);
-        setArtistRecords(res.data.data.artistRecords);
+        setLoading(true);
+        // Fetch artist data based on id
+        const fetchArtistData = async (artistId) => {
+            const res = await api.get<ApiResponseDTO<ArtistProfileDTO>>(
+            "/api/v1/artist/" + artistId
+            );
+            setArtist(res.data.data);
+            setPopularSongs(res.data.data.popularSongs);
+            setArtistRecords(res.data.data.artistRecords);
+        };
+
+        const checkIsFollowing = async (artistId: string) => {
+            const res = await api.get(`/api/v1/artist/${artistId}/isFollowing`);
+            // Assuming the API returns a boolean directly or wrapped in data
+            setIsFollowing(!!res.data.data);
+        };
+
+        await Promise.all([fetchArtistData(artistId), checkIsFollowing(artistId)]);
       } catch (error) {
         console.error("Failed to fetch artist data:", error);
+        toast.error("Failed to load artist data");
+      } finally {
+        setLoading(false);
       }
     };
 
-    const checkIsFollowing = async (artistId: string) => {
-      try {
-        const res = await api.get(`/api/v1/artist/${artistId}/isFollowing`);
-        // Assuming the API returns a boolean directly or wrapped in data
-        setIsFollowing(!!res.data.data);
-      } catch (e) {
-        console.error("Failed to check follow status", e);
-      }
-    };
-
-    fetchArtistData(artistId);
-    checkIsFollowing(artistId);
+    loadData();
   }, [id]);
 
   const handleFollowToggle = async () => {
@@ -236,6 +240,14 @@ export default function ArtistProfile() {
             }));
           }}
         />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
       </div>
     );
   }

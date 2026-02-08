@@ -48,18 +48,27 @@ export default function RecordPage() {
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-    const recordId = Array.isArray(id) ? id[0] : id;
-    if (recordId) {
-      const record = await getRecordById(recordId);
-      if (record) {
-        setRecord(record);
+    try {
+      setLoading(true);
+      const recordId = Array.isArray(id) ? id[0] : id;
+      if (recordId) {
+        const record = await getRecordById(recordId);
+        if (record) {
+          setRecord(record);
+        }
+        const songs = await fetchSongsByRecordId(recordId, true);
+        if (songs) {
+          setSongs(songs);
+        }
       }
-      const songs = await fetchSongsByRecordId(recordId, true);
-      if (songs) {
-        setSongs(songs);
-      }
+    } catch (error) {
+      console.error("Failed to load record data:", error);
+      toast.error("Failed to load record data");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -121,6 +130,14 @@ export default function RecordPage() {
       },
     });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen text-white">

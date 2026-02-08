@@ -24,6 +24,7 @@ export default function UserProfilePage() {
   const [user, setUser] = useState<UserProfileDTO | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
 
   useEffect(() => {
     if (profileId) {
@@ -64,6 +65,7 @@ export default function UserProfilePage() {
 
   const handleVerifyEmail = async () => {
     try {
+        setIsVerifyingEmail(true);
         const res = await api.get<ApiResponseDTO<boolean>>("/api/v1/email/generate-verification-token");
         if (res.data.success) {
             toast.success("Verification email sent! Link valid for 24 hours.");
@@ -75,6 +77,8 @@ export default function UserProfilePage() {
         if (!error.response) {
             toast.error("Failed to send verification email. Please try again later.");
         }
+    } finally {
+        setIsVerifyingEmail(false);
     }
   };
 
@@ -195,10 +199,15 @@ export default function UserProfilePage() {
                 {!user.emailVerified && isOwner && (
                     <button 
                         onClick={handleVerifyEmail}
-                        className="flex items-center gap-2 bg-yellow-500/10 hover:bg-yellow-500/20 px-3 py-1.5 rounded-full text-yellow-500 transition border border-yellow-500/20"
+                        disabled={isVerifyingEmail}
+                        className="flex items-center gap-2 bg-yellow-500/10 hover:bg-yellow-500/20 px-3 py-1.5 rounded-full text-yellow-500 transition border border-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>Verify Email</span>
+                        {isVerifyingEmail ? (
+                            <div className="w-4 h-4 border-2 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin" />
+                        ) : (
+                            <AlertCircle className="w-4 h-4" />
+                        )}
+                        <span>{isVerifyingEmail ? "Sending..." : "Verify Email"}</span>
                     </button>
                 )}
                 {isOwner && user.emailVerified && (

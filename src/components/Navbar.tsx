@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { User, Music2, LogOut, Search } from "lucide-react";
+import Image from "next/image";
+import { User, LogOut, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import GlobalSearch from "./search/GlobalSearch";
@@ -82,10 +83,18 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="text-lg font-bold tracking-tight flex items-center gap-2"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
-          <Music2 className="w-6 h-6 text-red-500" />
-          <span className="text-white">Cadence</span>
+          <Image
+            src="/images/cadence-logo.png"
+            alt="Cadence Logo"
+            width={30}
+            height={30}
+            className="object-contain brightness-0 invert"
+          />
+          <span className="text-2xl font-bold tracking-tighter text-white">
+            Cadence
+          </span>
         </Link>
 
         {/* Search Bar */}

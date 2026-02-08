@@ -88,6 +88,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const preloadCache = useRef<Map<string, { buffer: ArrayBuffer, contentType: string }>>(new Map());
   const onSeekRef = useRef<(() => void) | null>(null);
   const onResumeFetchRef = useRef<(() => void) | null>(null);
+  const isSeekingRef = useRef(false);
+  const targetSeekTimeRef = useRef(0);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -96,7 +98,18 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const audio = audioRef.current;
 
-      const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+      const handleTimeUpdate = () => {
+        if (isSeekingRef.current) {
+            // If we are seeking, only update if we are close to the target
+            // This prevents "jumping back" to old time before seek takes effect
+            if (Math.abs(audio.currentTime - targetSeekTimeRef.current) < 0.5) {
+                isSeekingRef.current = false;
+            } else {
+                return;
+            }
+        }
+        setCurrentTime(audio.currentTime);
+      };
       const handleDurationChange = () => {
         const d = audio.duration;
         if (Number.isFinite(d)) {
@@ -107,7 +120,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
       const handleWaiting = () => setIsBuffering(true);
       const handlePlaying = () => setIsBuffering(false);
-      const handleCanPlay = () => setIsBuffering(false);
+      const handleCanPlay = () => {
+          setIsBuffering(false);
+          // If we were supposed to be playing but were paused for buffering, resume now
+          if (isPlaying && audio.paused) {
+              audio.play();
+          }
+      };
       const handleSeeking = () => {
         if (onSeekRef.current) onSeekRef.current();
       };
@@ -301,8 +320,12 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         }
                     };
                     await pump();
-                } catch (e) {
-                    // ignore aborts
+                } catch (e: any) {
+                    if (e.code === "ERR_CANCELED" || e.name === "CanceledError" || e.name === "AbortError") {
+                        return;
+                    }
+                    console.error("Stream fetch error:", e);
+                    setIsBuffering(false);
                 }
             };
 
@@ -311,20 +334,40 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const seekTime = audio.currentTime;
                 
                 // Check if buffered
+                let isBuffered = false;
                 for (let i = 0; i < sourceBuffer.buffered.length; i++) {
                     if (seekTime >= sourceBuffer.buffered.start(i) && seekTime <= sourceBuffer.buffered.end(i) - 0.5) {
-                        return; // Already buffered
+                        isBuffered = true;
+                        break;
                     }
                 }
+
+                if (isBuffered) {
+                    return;
+                }
                 
+                // Stop playback if unbuffered
+                audio.pause();
                 setIsBuffering(true);
                 
                 if (seekTimeout) clearTimeout(seekTimeout);
                 seekTimeout = setTimeout(() => {
                     const duration = audio.duration || song.totalDuration || 1;
-                    // Estimate byte position
-                    const bytePos = Math.floor((seekTime / duration) * totalSizeBytes);
-                    fetchAndAppend(bytePos, seekTime);
+                    
+                    // Find gap start (end of the buffered range immediately preceding seekTime)
+                    let startByteTime = 0;
+                    for (let i = 0; i < sourceBuffer.buffered.length; i++) {
+                        const end = sourceBuffer.buffered.end(i);
+                        if (end < seekTime) {
+                            startByteTime = end;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Estimate byte position based on the gap start
+                    const bytePos = Math.floor((startByteTime / duration) * totalSizeBytes);
+                    fetchAndAppend(bytePos, startByteTime);
                 }, 200);
             };
 
@@ -372,6 +415,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const codec = MediaSource.isTypeSupported(mime) ? mime : 'audio/mpeg';
 
                 try {
+                    // Set duration if known to prevent playback issues
+                    if (song.totalDuration && Number.isFinite(song.totalDuration)) {
+                        mediaSource.duration = song.totalDuration;
+                    }
+                    
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
                     
                     if (cached && initialBuffer) {
@@ -554,8 +602,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const seekTo = (time: number) => {
     if (audioRef.current) {
-      audioRef.current.currentTime = time;
+      // Set seeking state to prevent UI jumps
+      isSeekingRef.current = true;
+      targetSeekTimeRef.current = time;
+      
+      // Immediate UI feedback
       setCurrentTime(time);
+      setIsBuffering(true);
+
+      audioRef.current.currentTime = time;
     }
   };
 

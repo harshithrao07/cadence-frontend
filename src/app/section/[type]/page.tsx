@@ -55,7 +55,7 @@ export default function SectionPage() {
           content: (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {data.recentlyPlayedSongs.map((song, index) => (
-                <SongCard key={song.id} song={song} onClick={() => playQueue(data.recentlyPlayedSongs, index)} />
+                <SongCard key={song.id} song={song} onClick={() => playQueue(data.recentlyPlayedSongs.slice(index), 0)} />
               ))}
             </div>
           ),
@@ -88,7 +88,7 @@ export default function SectionPage() {
             content: (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {data.trendingSongs.map((song, index) => (
-                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.trendingSongs, index)} />
+                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.trendingSongs.slice(index), 0)} />
                 ))}
               </div>
             ),
@@ -121,7 +121,7 @@ export default function SectionPage() {
             content: (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {data.recommendedSongs.map((song, index) => (
-                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.recommendedSongs, index)} />
+                  <SongCard key={song.id} song={song} onClick={() => playQueue(data.recommendedSongs.slice(index), 0)} />
                 ))}
               </div>
             ),

@@ -18,6 +18,9 @@ const outfit = Outfit({
 export const metadata = {
   title: "Cadence",
   description: "Stream your favorite music with our Cadence app.",
+  icons: {
+    icon: "/images/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }) {

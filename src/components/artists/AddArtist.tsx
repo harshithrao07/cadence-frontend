@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { UpsertArtistDTO } from "../../types/Artists";
 import api from "../../lib/api";
 import ProfilePictureSelector from "@/components/auth/ProfilePictureSelector";
@@ -41,6 +41,7 @@ const AddArtist: React.FC<AddArtistProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [profilePic, setProfilePic] = useState(initialArtist?.profileUrl || null);
   const [fileInputRef, setFileInputRef] = useState<File>(null);
+  const [loading, setLoading] = useState(false);
 
   const { refreshArtists } = useArtists();
 
@@ -59,6 +60,7 @@ const AddArtist: React.FC<AddArtistProps> = ({
       return;
     }
 
+    setLoading(true);
     try {
       const payload = {
         id: initialArtist?.id || null,
@@ -149,6 +151,8 @@ const AddArtist: React.FC<AddArtistProps> = ({
       }
     } catch (error) {
       console.error("Error saving artist:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -222,13 +226,24 @@ const AddArtist: React.FC<AddArtistProps> = ({
           <div className="flex gap-4 pt-4">
             <button
               onClick={handleSubmit}
-              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-10 py-4 rounded-full font-bold transition-all transform hover:scale-105 shadow-lg shadow-red-500/30"
+              disabled={loading}
+              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-10 py-4 rounded-full font-bold transition-all transform hover:scale-105 shadow-lg shadow-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {mode === "edit" ? "Save Changes" : "Add Artist"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  {mode === "edit" ? "Saving..." : "Adding..."}
+                </>
+              ) : mode === "edit" ? (
+                "Save Changes"
+              ) : (
+                "Add Artist"
+              )}
             </button>
             <button
               onClick={handleCancel}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white px-10 py-4 rounded-full font-bold transition-all border border-zinc-700"
+              disabled={loading}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white px-10 py-4 rounded-full font-bold transition-all border border-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

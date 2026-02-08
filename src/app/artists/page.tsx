@@ -105,16 +105,8 @@ export default function ArtistsPage() {
 
             {/* Grid */}
             {loading && artists.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div
-                    key={`artist-skeleton-${i}`}
-                    className="bg-zinc-900/40 p-5 rounded-xl animate-pulse"
-                  >
-                    <div className="aspect-square bg-zinc-800 rounded-xl mb-4" />
-                    <div className="h-4 bg-zinc-700 rounded w-3/4 mx-auto" />
-                  </div>
-                ))}
+              <div className="flex items-center justify-center py-32">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
               </div>
             ) : (
               <>

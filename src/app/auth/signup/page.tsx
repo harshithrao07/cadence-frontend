@@ -40,6 +40,8 @@ const Signup = () => {
     try {
       const response = await api.post(`/auth/v1/register`, {
         ...signupBody,
+      }, {
+        withCredentials: true,
       });
 
       const authResponse: AuthenticationResponseDTO = response.data.data;

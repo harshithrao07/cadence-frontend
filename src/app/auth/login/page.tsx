@@ -46,7 +46,9 @@ const Login = () => {
     if (newErrors.email || newErrors.password) return;
 
     try {
-      const response = await api.post(`/auth/v1/authenticate`, loginBody);
+      const response = await api.post(`/auth/v1/authenticate`, loginBody, {
+        withCredentials: true,
+      });
 
       const authResponse: AuthenticationResponseDTO = response.data.data;
       localStorage.setItem("auth_details", JSON.stringify(authResponse));

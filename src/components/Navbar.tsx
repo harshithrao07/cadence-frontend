@@ -44,10 +44,6 @@ export default function Navbar() {
         label: "Logout",
         onClick: async () => {
           try {
-            await api.post("/auth/v1/logout");
-          } catch (e) {
-            console.error("Logout error:", e);
-          } finally {
             resetPlayer();
 
             document.cookie.split(";").forEach((c) => {
@@ -60,6 +56,8 @@ export default function Navbar() {
             setUserId(null);
             router.push("/auth/login");
             toast.success("Logged out successfully");
+          } catch (e) {
+            console.error("Logout error:", e);
           }
         },
       },

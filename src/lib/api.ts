@@ -63,22 +63,31 @@ api.interceptors.response.use(
         } else {
           // Access token is invalid/expired
           try {
+            const authDetails: AuthenticationResponseDTO = JSON.parse(
+              localStorage.getItem("auth_details") || "{}"
+            );
+            const refreshToken = authDetails?.refreshToken;
+
+            if (!refreshToken) {
+              throw new Error("No refresh token available");
+            }
+
             const response = await axios.post(
               `${process.env.NEXT_PUBLIC_API_URL}auth/v1/refresh`,
               {},
-              { withCredentials: true }
+              {
+                headers: {
+                  Authorization: `Bearer ${refreshToken}`,
+                },
+              }
             );
 
             const accessToken = response.data;
 
-            const oldAuthDetails: AuthenticationResponseDTO = JSON.parse(
-              localStorage.getItem("auth_details") || "{}"
-            );
-
             localStorage.setItem(
               "auth_details",
               JSON.stringify({
-                ...oldAuthDetails,
+                ...authDetails,
                 accessToken,
               })
             );

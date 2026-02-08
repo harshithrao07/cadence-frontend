@@ -12,11 +12,13 @@ function OAuthSuccessContent() {
   useEffect(() => {
     const token = searchParams.get("token");
     const userId = searchParams.get("userId");
+    const refreshToken = searchParams.get("refresh");
 
-    if (token && userId) {
+    if (token && userId && refreshToken) {
       const authDetails: AuthenticationResponseDTO = {
         id: userId,
         accessToken: token,
+        refreshToken: refreshToken,
       };
 
       localStorage.setItem("auth_details", JSON.stringify(authDetails));
@@ -26,7 +28,7 @@ function OAuthSuccessContent() {
       // If params are missing, maybe we just landed here?
       // But we should have them.
       // Let's check if we have them before redirecting to error
-      if (!token && !userId) {
+      if (!token && !userId && !refreshToken) {
           // Could be initial render or direct access
           // We can wait a bit or redirect
            router.push("/auth/login");

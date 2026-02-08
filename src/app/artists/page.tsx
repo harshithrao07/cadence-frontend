@@ -12,11 +12,15 @@ import { useRouter } from "next/navigation";
 export default function ArtistsPage() {
   const { artists, loading, hasMore, loadMore, refreshArtists, searchArtists } =
     useArtists();
-  const { isAdmin } = useUser();
+  const { isAdmin, checkIsAdmin } = useUser();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    checkIsAdmin();
+  }, []);
 
   /* 🔍 Debounced backend search */
   useEffect(() => {
